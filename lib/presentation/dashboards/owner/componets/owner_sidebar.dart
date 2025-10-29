@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
+import 'package:pos_desktop/presentation/state_management/login/logout_controller.dart';
 
 class OwnerSidebar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final _logoutController = LogoutController(); // ✅ use controller
 
-  const OwnerSidebar({
+  OwnerSidebar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
@@ -42,6 +44,8 @@ class OwnerSidebar extends StatelessWidget {
             style: AppText.h2.copyWith(color: AppColors.primary),
           ),
           const SizedBox(height: 36),
+
+          // 🔹 Sidebar Items
           Expanded(
             child: ListView.builder(
               itemCount: items.length,
@@ -95,26 +99,32 @@ class OwnerSidebar extends StatelessWidget {
               },
             ),
           ),
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  LucideIcons.logOut,
-                  color: AppColors.textMedium,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  "Logout",
-                  style: AppText.body.copyWith(color: AppColors.textMedium),
-                ),
-              ],
+
+          // 🔹 Logout Button (simple call to controller)
+          InkWell(
+            onTap: () => _logoutController.logout(context),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    LucideIcons.logOut,
+                    color: AppColors.textMedium,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Logout",
+                    style: AppText.body.copyWith(color: AppColors.textMedium),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

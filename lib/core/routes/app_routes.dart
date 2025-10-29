@@ -6,8 +6,10 @@ import 'package:pos_desktop/presentation/dashboards/super_admin/super_admin_dash
 import 'package:pos_desktop/presentation/dashboards/owner/owner_dashboard.dart';
 import 'package:pos_desktop/presentation/screens/login_screen.dart';
 import 'package:pos_desktop/presentation/screens/owner_signup_screen.dart';
+import 'package:pos_desktop/presentation/screens/splash_screen.dart';
 
 class AppRoutes {
+  static const String splash = '/';
   static const String login = '/login';
   static const String ownerSignup = '/owner-signup';
   static const String superAdminDashboard = '/super-admin-dashboard';
@@ -21,6 +23,9 @@ class AppRoutes {
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
+      case AppRoutes.splash:
+        return MaterialPageRoute(builder: (_) => const SplashScreen());
+
       case AppRoutes.login:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
 
@@ -32,12 +37,15 @@ class AppRouter {
 
       case AppRoutes.ownerDashboard:
         return MaterialPageRoute(builder: (_) => const OwnerDashboard());
+
       case AppRoutes.cashierDashboard:
         return MaterialPageRoute(builder: (_) => const CashierDashboard());
+
       case AppRoutes.inventoryManagerDashboard:
         return MaterialPageRoute(
           builder: (_) => const InventoryManagerDashboard(),
         );
+
       case AppRoutes.accountantDashboard:
         return MaterialPageRoute(builder: (_) => const AccountantDashboard());
 

@@ -1,7 +1,7 @@
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:logger/logger.dart';
 import 'package:pos_desktop/data/models/owner_model.dart';
-import 'package:pos_desktop/core/errors/exception_handler.dart';
+import 'package:pos_desktop/core/errors/exception_handler.dart'; // ✅ ADDED
 import 'package:pos_desktop/core/errors/failure.dart';
 import 'dart:math';
 
@@ -37,6 +37,7 @@ class OwnerDao {
       });
     } catch (e) {
       _logger.e('❌ Database error in insertOwner: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -56,6 +57,7 @@ class OwnerDao {
       });
     } catch (e) {
       _logger.e('❌ Database error in getPendingOwners: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -81,6 +83,7 @@ class OwnerDao {
       return count;
     } catch (e) {
       _logger.e('❌ Database error in activateOwner: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -104,6 +107,7 @@ class OwnerDao {
       return count;
     } catch (e) {
       _logger.e('❌ Database error in rejectOwner: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -140,6 +144,7 @@ class OwnerDao {
       return OwnerModel.fromMap(result.first);
     } catch (e) {
       _logger.e('❌ Database error in getOwnerByCredentials: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -152,6 +157,7 @@ class OwnerDao {
       return result.map((map) => OwnerModel.fromMap(map)).toList();
     } catch (e) {
       _logger.e('❌ Database error in getAllOwners: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -169,6 +175,7 @@ class OwnerDao {
       return result.map((map) => OwnerModel.fromMap(map)).toList();
     } catch (e) {
       _logger.e('❌ Database error in getApprovedOwners: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -192,6 +199,7 @@ class OwnerDao {
       return count;
     } catch (e) {
       _logger.e('❌ Database error in updateOwner: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }
@@ -214,6 +222,7 @@ class OwnerDao {
       return count;
     } catch (e) {
       _logger.e('❌ Database error in deleteOwner: $e');
+      // ✅ USING EXCEPTIONHANDLER
       throw ExceptionHandler.handle(e);
     }
   }

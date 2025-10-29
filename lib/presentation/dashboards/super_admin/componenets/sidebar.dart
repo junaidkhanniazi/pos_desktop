@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
+import 'package:pos_desktop/presentation/state_management/login/logout_controller.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
+  final _logoutController = LogoutController(); // ✅ use controller
 
-  const Sidebar({
+  Sidebar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
@@ -16,10 +18,7 @@ class Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       {'icon': Icons.dashboard_rounded, 'label': 'Overview'},
-      {
-        'icon': Icons.group_add_rounded,
-        'label': 'Owner Requests',
-      }, // 🆕 new tab
+      {'icon': Icons.group_add_rounded, 'label': 'Owner Requests'},
       {'icon': Icons.people_alt_rounded, 'label': 'Owners'},
       {'icon': Icons.bar_chart_rounded, 'label': 'Reports'},
       {'icon': Icons.settings_rounded, 'label': 'Settings'},
@@ -100,7 +99,7 @@ class Sidebar extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            onTap: () {},
+            onTap: () => _logoutController.logout(context), // ✅ clean call
           ),
           const SizedBox(height: 10),
         ],

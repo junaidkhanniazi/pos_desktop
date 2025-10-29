@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/core/utils/toast_helper.dart';
+import 'package:pos_desktop/domain/repositories/repositories_impl/owner_repository_impl.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_input.dart';
-import '../../data/models/owner_model.dart';
-import '../../data/local/dao/owner_dao.dart';
-import '../../core/errors/failure.dart';
+import 'package:pos_desktop/data/local/dao/owner_dao.dart';
+import 'package:pos_desktop/presentation/state_management/owner/owner_signup_controller.dart';
 
 class OwnerSignupScreen extends StatefulWidget {
   const OwnerSignupScreen({super.key});
@@ -17,84 +16,19 @@ class OwnerSignupScreen extends StatefulWidget {
 }
 
 class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
-  final _formKey = GlobalKey<FormState>();
-
-  final _shopName = TextEditingController();
-  final _ownerName = TextEditingController();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
-  final _confirmPassword = TextEditingController();
-  final _contact = TextEditingController();
-
+  late final OwnerSignupController controller;
   bool _isLoading = false;
-  final _ownerDao = OwnerDao();
+
+  @override
+  void initState() {
+    super.initState();
+    controller = OwnerSignupController(OwnerRepositoryImpl(OwnerDao()));
+  }
 
   @override
   void dispose() {
-    _shopName.dispose();
-    _ownerName.dispose();
-    _email.dispose();
-    _password.dispose();
-    _confirmPassword.dispose();
-    _contact.dispose();
+    controller.dispose();
     super.dispose();
-  }
-
-  void _onSignup() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // Ensure password and confirm password match
-    if (_password.text != _confirmPassword.text) {
-      AppToast.show(
-        context,
-        message: 'Passwords do not match',
-        type: ToastType.error,
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final owner = OwnerModel(
-      shopName: _shopName.text.trim(),
-      ownerName: _ownerName.text.trim(),
-      email: _email.text.trim(),
-      password: _password.text,
-      contact: _contact.text.trim(),
-      // No activationCode - will be generated when super admin approves
-      status: 'pending', // Explicitly set to pending
-      isActive: false, // Explicitly set to inactive
-    );
-
-    try {
-      // Insert new owner into the database
-      await _ownerDao.insertOwner(owner);
-      AppToast.show(
-        context,
-        message:
-            'Registration submitted successfully! Wait for admin approval.',
-        type: ToastType.success,
-      );
-
-      // Redirect to login
-      Navigator.pop(context);
-    } on Failure catch (e) {
-      // ✅ Now catching your custom Failure types
-      AppToast.show(
-        context,
-        message: e.message, // User-friendly error message
-        type: ToastType.error,
-      );
-    } catch (e) {
-      // Fallback for any unexpected errors
-      AppToast.show(
-        context,
-        message: 'An unexpected error occurred. Please try again.',
-        type: ToastType.error,
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
   }
 
   @override
@@ -119,7 +53,7 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
             ],
           ),
           child: Form(
-            key: _formKey,
+            key: controller.formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -135,51 +69,58 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
 
                 // Shop Name
                 AppInput(
-                  controller: _shopName,
+                  controller: controller.shopName,
                   hint: 'Shop Name',
                   icon: Icons.storefront,
+                  validator: controller.validateShopName,
                 ),
                 const SizedBox(height: 16),
 
                 // Owner Name
                 AppInput(
-                  controller: _ownerName,
+                  controller: controller.ownerName,
                   hint: 'Owner Name',
                   icon: Icons.person,
+                  validator: controller.validateOwnerName,
                 ),
                 const SizedBox(height: 16),
 
                 // Email
                 AppInput(
-                  controller: _email,
+                  controller: controller.email,
                   hint: 'Email Address',
                   icon: Icons.email,
+                  type: InputType.email,
+                  validator: controller.validateEmail,
                 ),
                 const SizedBox(height: 16),
 
                 // Password
                 AppInput(
-                  controller: _password,
+                  controller: controller.password,
                   hint: 'Password',
                   obscureText: true,
                   icon: Icons.lock,
+                  validator: controller.validatePassword,
                 ),
                 const SizedBox(height: 16),
 
                 // Confirm Password
                 AppInput(
-                  controller: _confirmPassword,
+                  controller: controller.confirmPassword,
                   hint: 'Confirm Password',
                   obscureText: true,
                   icon: Icons.lock_outline,
+                  validator: controller.validateConfirmPassword,
                 ),
                 const SizedBox(height: 16),
 
                 // Contact
                 AppInput(
-                  controller: _contact,
+                  controller: controller.contact,
                   hint: 'Contact Number',
                   icon: Icons.phone,
+                  type: InputType.phone,
                 ),
                 const SizedBox(height: 24),
 
@@ -188,12 +129,14 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
                     : AppButton(
                         label: 'Create My Store',
                         width: double.infinity,
-                        onPressed: _onSignup,
+                        onPressed: () async {
+                          setState(() => _isLoading = true);
+                          await controller.signup(context);
+                          if (mounted) setState(() => _isLoading = false);
+                        },
                       ),
-
                 const SizedBox(height: 16),
 
-                // Already have an account
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

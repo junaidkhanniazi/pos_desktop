@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
+import 'package:pos_desktop/core/utils/date_utils.dart'; // ✅ ADDED
+import 'package:pos_desktop/presentation/widgets/app_loader.dart'; // ✅ ADDED
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
 import 'package:pos_desktop/data/models/owner_model.dart';
@@ -202,7 +204,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
     if (dateString == null) return 'N/A';
     try {
       final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
+      // ✅ USING DATEUTILSHELPER
+      return DateUtilsHelper.format(date);
     } catch (e) {
       return 'N/A';
     }
@@ -236,7 +239,9 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
                 ],
               ),
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppLoader(
+                      message: "Loading owner requests...",
+                    ) // ✅ USING APP_LOADER
                   : _pendingOwners.isEmpty
                   ? Center(
                       child: Text(

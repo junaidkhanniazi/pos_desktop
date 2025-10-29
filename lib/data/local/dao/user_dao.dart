@@ -1,100 +1,147 @@
 import 'package:logger/logger.dart';
+import 'package:pos_desktop/core/errors/exception_handler.dart';
+import 'package:pos_desktop/core/errors/failure.dart';
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/models/user_model.dart';
 
 class UserDao {
-  final _db = DatabaseHelper();
-  final _log = Logger();
+  final _dbHelper = DatabaseHelper();
+  final _logger = Logger();
 
-  /// Insert user (avoid duplicate username)
+  /// Add new staff member (created by owner)
   Future<int> insertUser(UserModel user) async {
-    final db = await _db.database;
+    try {
+      final db = await _dbHelper.database;
+      return await _dbHelper.executeWithRetry(() async {
+        // Check duplicate username
+        final existing = await db.query(
+          'users',
+          where: 'username = ?',
+          whereArgs: [user.username],
+          limit: 1,
+        );
 
-    final dup = await db.query(
-      'users',
-      where: 'username = ?',
-      whereArgs: [user.username],
-      limit: 1,
-    );
+        if (existing.isNotEmpty) {
+          throw ValidationFailure('A user with this username already exists.');
+        }
 
-    if (dup.isNotEmpty) {
-      _log.w('⚠️ Username already exists: ${user.username}');
-      return dup.first['id'] as int;
+        final id = await db.insert('users', user.toMap());
+        _logger.i('👤 New staff added with ID: $id');
+        return id;
+      });
+    } catch (e) {
+      _logger.e('❌ insertUser error: $e');
+      throw ExceptionHandler.handle(e);
     }
-
-    final id = await db.insert('users', user.toMap());
-    _log.i(
-      '👤 User inserted id=$id (owner=${user.ownerId}, role=${user.role})',
-    );
-    return id;
   }
 
-  /// Fetch all users (filter by owner if provided)
-  Future<List<UserModel>> getUsers({int? ownerId}) async {
-    final db = await _db.database;
-    final result = await db.query(
-      'users',
-      where: ownerId != null ? 'owner_id = ?' : null,
-      whereArgs: ownerId != null ? [ownerId] : null,
-      orderBy: 'id DESC',
-    );
-    return result.map((map) => UserModel.fromMap(map)).toList();
-  }
+  /// Login user (used by AuthRepository)
+  Future<UserModel?> loginUser(String email, String password) async {
+    try {
+      final db = await _dbHelper.database;
+      return await _dbHelper.executeWithRetry(() async {
+        final result = await db.query(
+          'users',
+          where: 'username = ? AND password = ? AND is_active = 1',
+          whereArgs: [email.trim(), password.trim()],
+          limit: 1,
+        );
 
-  /// Login check
-  Future<UserModel?> getByCredentials(
-    int ownerId,
-    String username,
-    String password,
-  ) async {
-    final db = await _db.database;
-    final res = await db.query(
-      'users',
-      where: 'owner_id = ? AND username = ? AND password = ? AND is_active = 1',
-      whereArgs: [ownerId, username, password],
-      limit: 1,
-    );
+        if (result.isEmpty) {
+          _logger.w('⚠️ Invalid user credentials for $email');
+          return null;
+        }
 
-    if (res.isNotEmpty) {
-      _log.i('✅ User login: $username (owner=$ownerId)');
-      return UserModel.fromMap(res.first);
+        return UserModel.fromMap(result.first);
+      });
+    } catch (e) {
+      _logger.e('❌ loginUser error: $e');
+      throw ExceptionHandler.handle(e);
     }
-
-    _log.w('🚫 Invalid credentials for $username (owner=$ownerId)');
-    return null;
   }
 
-  /// Update user details
+  /// Fetch all users for specific owner (for staff management screen)
+  Future<List<UserModel>> getUsersByOwner(int ownerId) async {
+    try {
+      final db = await _dbHelper.database;
+      final result = await db.query(
+        'users',
+        where: 'owner_id = ?',
+        whereArgs: [ownerId],
+        orderBy: 'id DESC',
+      );
+      return result.map((map) => UserModel.fromMap(map)).toList();
+    } catch (e) {
+      _logger.e('❌ getUsersByOwner error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  /// Update user record
   Future<int> updateUser(UserModel user) async {
-    final db = await _db.database;
-    final count = await db.update(
-      'users',
-      user.toMap(),
-      where: 'id = ?',
-      whereArgs: [user.id],
-    );
-    _log.i('🔄 User updated id=${user.id} · rows=$count');
-    return count;
+    try {
+      final db = await _dbHelper.database;
+      final count = await db.update(
+        'users',
+        user.toMap(),
+        where: 'id = ?',
+        whereArgs: [user.id],
+      );
+
+      if (count == 0) {
+        throw DatabaseFailure('User not found (id=${user.id})');
+      }
+
+      _logger.i('🔄 User updated: ${user.id}');
+      return count;
+    } catch (e) {
+      _logger.e('❌ updateUser error: $e');
+      throw ExceptionHandler.handle(e);
+    }
   }
 
-  /// Toggle active state
-  Future<int> setActive(int id, bool isActive) async {
-    final db = await _db.database;
-    final count = await db.update(
-      'users',
-      {'is_active': isActive ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    _log.i('🟢 User setActive id=$id → $isActive · rows=$count');
-    return count;
+  /// Soft delete / deactivate user
+  Future<int> deactivateUser(int userId) async {
+    try {
+      final db = await _dbHelper.database;
+      final count = await db.update(
+        'users',
+        {'is_active': 0},
+        where: 'id = ?',
+        whereArgs: [userId],
+      );
+
+      if (count == 0) {
+        throw DatabaseFailure('User not found with ID: $userId');
+      }
+
+      _logger.w('🧹 User deactivated (id=$userId)');
+      return count;
+    } catch (e) {
+      _logger.e('❌ deactivateUser error: $e');
+      throw ExceptionHandler.handle(e);
+    }
   }
 
-  /// Delete user
-  Future<int> deleteUser(int id) async {
-    final db = await _db.database;
-    final count = await db.delete('users', where: 'id = ?', whereArgs: [id]);
-    _log.i('🗑️ User deleted id=$id · rows=$count');
-    return count;
+  /// Delete staff permanently (owner-controlled)
+  Future<int> deleteUser(int userId) async {
+    try {
+      final db = await _dbHelper.database;
+      final count = await db.delete(
+        'users',
+        where: 'id = ?',
+        whereArgs: [userId],
+      );
+
+      if (count == 0) {
+        throw DatabaseFailure('User not found with ID: $userId');
+      }
+
+      _logger.w('🗑️ User deleted: $userId');
+      return count;
+    } catch (e) {
+      _logger.e('❌ deleteUser error: $e');
+      throw ExceptionHandler.handle(e);
+    }
   }
 }

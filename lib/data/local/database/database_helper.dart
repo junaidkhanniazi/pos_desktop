@@ -32,7 +32,7 @@ class DatabaseHelper {
       var db = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
           onCreate: _createTables,
           onConfigure: (db) async {
             // Configure database for better performance
@@ -69,20 +69,35 @@ class DatabaseHelper {
     // 2️⃣ Owners
     await db.execute('''
       CREATE TABLE IF NOT EXISTS owners (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        super_admin_id INTEGER,
-        shop_name TEXT NOT NULL,
-        owner_name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        contact TEXT,
-        activation_code TEXT,
-        status TEXT DEFAULT 'pending',
-        is_active INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (super_admin_id) REFERENCES super_admin (id)
-      );
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      super_admin_id INTEGER,
+      shop_name TEXT NOT NULL,
+      owner_name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      contact TEXT,
+      activation_code TEXT,
+      status TEXT DEFAULT 'pending',
+      is_active INTEGER DEFAULT 0,
+      subscription_plan TEXT,
+      receipt_image TEXT,
+      payment_date TEXT,
+      subscription_amount REAL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (super_admin_id) REFERENCES super_admin (id)
+    );
     ''');
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS subscription_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      duration_days INTEGER NOT NULL,
+      price REAL NOT NULL,
+      features TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  ''');
 
     // 3️⃣ Users
     await db.execute('''
@@ -205,6 +220,57 @@ class DatabaseHelper {
 
     // Now create indexes AFTER tables are created
     await _createIndexes(db);
+    await _insertDefaultPlans(db);
+  }
+
+  Future<void> _insertDefaultPlans(Database db) async {
+    _logger.i('📋 Inserting default subscription plans...');
+
+    try {
+      // Check if plans already exist
+      final existingPlans = await db.query('subscription_plans');
+      if (existingPlans.isNotEmpty) {
+        _logger.i('✅ Default plans already exist, skipping...');
+        return;
+      }
+
+      // Insert default subscription plans
+      final defaultPlans = [
+        {
+          'name': 'Basic Plan',
+          'duration_days': 30,
+          'price': 2999.0,
+          'features':
+              '{"features": ["Up to 100 products", "Basic reports", "Email support", "1 user account"]}',
+          'is_active': 1,
+        },
+        {
+          'name': 'Premium Plan',
+          'duration_days': 30,
+          'price': 5999.0,
+          'features':
+              '{"features": ["Up to 500 products", "Advanced reports", "Priority support", "5 user accounts", "Inventory management"]}',
+          'is_active': 1,
+        },
+        {
+          'name': 'Enterprise Plan',
+          'duration_days': 30,
+          'price': 9999.0,
+          'features':
+              '{"features": ["Unlimited products", "Custom reports", "24/7 support", "Unlimited users", "Advanced analytics", "API access"]}',
+          'is_active': 1,
+        },
+      ];
+
+      for (final plan in defaultPlans) {
+        await db.insert('subscription_plans', plan);
+      }
+
+      _logger.i('✅ Default subscription plans inserted successfully!');
+    } catch (e) {
+      _logger.e('❌ Error inserting default plans: $e');
+      // Don't rethrow - this is not critical for app startup
+    }
   }
 
   Future<void> _createIndexes(Database db) async {
