@@ -50,19 +50,37 @@ class OwnerSignupController {
     return null;
   }
 
-  String? validateContact(String? v) => null; // optional
+  String? validateContact(String? v) {
+    if (v == null || v.isEmpty)
+      return 'Contact number is required'; // ✅ ADDED: Now required
+    final regex = RegExp(r'^[0-9+\-\s()]{10,}$');
+    if (!regex.hasMatch(v)) return 'Enter a valid contact number';
+    return null;
+  }
 
   // --- Signup handler ---
   Future<void> signup(BuildContext context) async {
     if (!formKey.currentState!.validate()) return;
 
+    // ✅ Create OwnerEntity with ALL required fields
     final entity = OwnerEntity(
-      id: '',
+      id: DateTime.now().millisecondsSinceEpoch
+          .toString(), // ✅ Generate unique ID
       name: ownerName.text.trim(),
       email: email.text.trim(),
       storeName: shopName.text.trim(),
+      password: password.text.trim(), // ✅ ADDED: Required field
+      contact: contact.text.trim(), // ✅ ADDED: Required field
+      superAdminId: null, // ✅ ADDED: Can be null
       status: OwnerStatus.pending,
       createdAt: DateTime.now(),
+      activationCode: null, // ✅ ADDED: Can be null
+      subscriptionPlan: null, // Will be set in payment screen
+      receiptImage: null, // Will be set in payment screen
+      paymentDate: null, // Will be set in payment screen
+      subscriptionAmount: null, // Will be set in payment screen
+      subscriptionStartDate: null, // Will be set when approved
+      subscriptionEndDate: null, // Will be set when approved
     );
 
     try {
@@ -81,6 +99,17 @@ class OwnerSignupController {
         type: ToastType.error,
       );
     }
+  }
+
+  // ✅ ADDED: Method to get form data for navigation to payment screen
+  Map<String, String> getFormData() {
+    return {
+      'shopName': shopName.text.trim(),
+      'ownerName': ownerName.text.trim(),
+      'email': email.text.trim(),
+      'password': password.text.trim(),
+      'contact': contact.text.trim(),
+    };
   }
 
   void clearForm() {

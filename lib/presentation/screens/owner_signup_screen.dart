@@ -22,7 +22,7 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
   @override
   void initState() {
     super.initState();
-    controller = OwnerSignupController(OwnerRepositoryImpl(OwnerDao()));
+    controller = OwnerSignupController(OwnerRepositoryImpl());
   }
 
   @override
@@ -121,6 +121,8 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
                   hint: 'Contact Number',
                   icon: Icons.phone,
                   type: InputType.phone,
+                  validator: controller.validateContact,
+                  maxLength: 11,
                 ),
                 const SizedBox(height: 24),
 
@@ -130,9 +132,21 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
                         label: 'Create My Store',
                         width: double.infinity,
                         onPressed: () async {
-                          setState(() => _isLoading = true);
-                          await controller.signup(context);
-                          if (mounted) setState(() => _isLoading = false);
+                          if (!controller.formKey.currentState!.validate())
+                            return;
+
+                          // Navigate to subscription screen with form data
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.subscriptionPlans,
+                            arguments: {
+                              'shopName': controller.shopName.text.trim(),
+                              'ownerName': controller.ownerName.text.trim(),
+                              'email': controller.email.text.trim(),
+                              'password': controller.password.text.trim(),
+                              'contact': controller.contact.text.trim(),
+                            },
+                          );
                         },
                       ),
                 const SizedBox(height: 16),

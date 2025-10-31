@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
+import 'package:pos_desktop/presentation/dashboards/owner/screens/subscription_management_screen.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/componenets/sidebar.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/componenets/topbar.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/screens/owner_requests_screen.dart';
@@ -18,12 +19,13 @@ class SuperAdminDashboard extends StatefulWidget {
 class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = const [
-    OverviewScreen(),
+  final List<Widget> _screens = [
+    const OverviewScreen(),
     OwnerRequestsScreen(),
-    OwnersScreen(),
-    ReportsScreen(),
-    SettingsScreen(),
+    const OwnersScreen(),
+    const ReportsScreen(),
+    const SubscriptionManagementScreen(),
+    const SettingsScreen(),
   ];
 
   @override

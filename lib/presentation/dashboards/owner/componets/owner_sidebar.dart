@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/state_management/login/logout_controller.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/logout_controller.dart';
 
 class OwnerSidebar extends StatelessWidget {
   final int selectedIndex;

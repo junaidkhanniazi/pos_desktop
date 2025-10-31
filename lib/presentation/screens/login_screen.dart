@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/state_management/login/login_controller.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/login_controller.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_input.dart';
 import 'package:pos_desktop/presentation/widgets/app_loader.dart';

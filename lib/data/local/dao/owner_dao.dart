@@ -1,51 +1,44 @@
-import 'package:pos_desktop/data/local/database/database_helper.dart';
-import 'package:logger/logger.dart';
-import 'package:pos_desktop/data/models/owner_model.dart';
-import 'package:pos_desktop/core/errors/exception_handler.dart'; // ✅ ADDED
-import 'package:pos_desktop/core/errors/failure.dart';
 import 'dart:math';
+import 'package:logger/logger.dart';
+import 'package:pos_desktop/core/errors/exception_handler.dart';
+import 'package:pos_desktop/core/errors/failure.dart';
+import 'package:pos_desktop/data/local/database/database_helper.dart';
+import 'package:pos_desktop/data/models/owner_model.dart';
 
 class OwnerDao {
   final _dbHelper = DatabaseHelper();
   final _logger = Logger();
 
-  /// Insert new owner (signup request)
+  // 🔹 Insert new owner (Signup request)
   Future<int> insertOwner(OwnerModel owner) async {
     try {
       final db = await _dbHelper.database;
-
-      // Use the retry mechanism for the entire operation
       return await _dbHelper.executeWithRetry(() async {
-        // Check for duplicate email
         final existing = await db.query(
           'owners',
           where: 'email = ?',
           whereArgs: [owner.email],
           limit: 1,
         );
-
         if (existing.isNotEmpty) {
           throw ValidationFailure('An owner with this email already exists');
         }
-
-        // Insert with pending status and no activation code
         final id = await db.insert('owners', owner.toMap());
-        _logger.i(
-          '🧩 Owner registration submitted with ID: $id (pending approval)',
-        );
+        _logger.i('🧾 New owner registered (pending approval) → ID: $id');
         return id;
       });
     } catch (e) {
-      _logger.e('❌ Database error in insertOwner: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ insertOwner error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Fetch pending owner requests
+  // 🔹 Fetch all pending requests
   Future<List<OwnerModel>> getPendingOwners() async {
     try {
       final db = await _dbHelper.database;
+      print("📍 DB Path (OwnerDao): ${(await _dbHelper.database).path}");
+
       return await _dbHelper.executeWithRetry(() async {
         final result = await db.query(
           'owners',
@@ -53,42 +46,45 @@ class OwnerDao {
           whereArgs: ['pending'],
           orderBy: 'id DESC',
         );
-        return result.map((map) => OwnerModel.fromMap(map)).toList();
+        return result.map((e) => OwnerModel.fromMap(e)).toList();
       });
     } catch (e) {
-      _logger.e('❌ Database error in getPendingOwners: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ getPendingOwners error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Activate owner and generate activation code
-  Future<int> activateOwner(int ownerId) async {
+  // 🔹 Activate owner (approve + generate code)
+  Future<void> activateOwner(int ownerId) async {
     try {
       final db = await _dbHelper.database;
-      final code = _generateActivationCode();
-
-      final count = await db.update(
-        'owners',
-        {'status': 'approved', 'is_active': 1, 'activation_code': code},
-        where: 'id = ?',
-        whereArgs: [ownerId],
-      );
-
-      if (count == 0) {
-        throw DatabaseFailure('Owner not found with ID: $ownerId');
-      }
-
-      _logger.i('✅ Owner activated (id=$ownerId) with code=$code');
-      return count;
+      await _dbHelper.executeWithRetry(
+        () async {
+          final count = await db.update(
+            'owners',
+            {
+              'status': 'approved',
+              'is_active': 1,
+              'activation_code': _generateActivationCode(),
+            },
+            where: 'id = ?',
+            whereArgs: [ownerId],
+          );
+          if (count == 0) {
+            throw DatabaseFailure('Owner not found with id=$ownerId');
+          }
+          print("✅ Owner with ID $ownerId activated successfully!");
+        },
+        maxRetries: 5,
+        baseDelay: 200,
+      ); // ✅ More retries for activation
     } catch (e) {
-      _logger.e('❌ Database error in activateOwner: $e');
-      // ✅ USING EXCEPTIONHANDLER
-      throw ExceptionHandler.handle(e);
+      print("❌ Error activating owner with ID $ownerId: $e");
+      throw e;
     }
   }
 
-  /// Reject owner request
+  // 🔹 Reject owner
   Future<int> rejectOwner(int ownerId) async {
     try {
       final db = await _dbHelper.database;
@@ -98,21 +94,34 @@ class OwnerDao {
         where: 'id = ?',
         whereArgs: [ownerId],
       );
-
-      if (count == 0) {
-        throw DatabaseFailure('Owner not found with ID: $ownerId');
-      }
-
-      _logger.i('❌ Owner rejected (id=$ownerId)');
+      if (count == 0) throw DatabaseFailure('Owner not found');
+      _logger.i('🚫 Owner rejected (id=$ownerId)');
       return count;
     } catch (e) {
-      _logger.e('❌ Database error in rejectOwner: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ rejectOwner error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Fetch owner by email/password + activation code
+  // 🔹 Delete owner
+  Future<int> deleteOwner(int ownerId) async {
+    try {
+      final db = await _dbHelper.database;
+      final count = await db.delete(
+        'owners',
+        where: 'id = ?',
+        whereArgs: [ownerId],
+      );
+      if (count == 0) throw DatabaseFailure('Owner not found');
+      _logger.i('🗑️ Owner deleted (id=$ownerId)');
+      return count;
+    } catch (e) {
+      _logger.e('❌ deleteOwner error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Owner login verification
   Future<OwnerModel?> getOwnerByCredentials(
     String email,
     String password, {
@@ -120,49 +129,40 @@ class OwnerDao {
   }) async {
     try {
       final db = await _dbHelper.database;
-
-      final whereClause = activationCode != null
+      final where = activationCode != null
           ? 'email = ? AND password = ? AND activation_code = ? AND status = ? AND is_active = 1'
           : 'email = ? AND password = ? AND status = ? AND is_active = 1';
-
-      final whereArgs = activationCode != null
-          ? [email.trim(), password.trim(), activationCode, 'approved']
-          : [email.trim(), password.trim(), 'approved'];
+      final args = activationCode != null
+          ? [email, password, activationCode, 'approved']
+          : [email, password, 'approved'];
 
       final result = await db.query(
         'owners',
-        where: whereClause,
-        whereArgs: whereArgs,
+        where: where,
+        whereArgs: args,
         limit: 1,
       );
-
-      if (result.isEmpty) {
-        _logger.w('⚠️ Invalid credentials or not approved for $email');
-        return null;
-      }
-
+      if (result.isEmpty) return null;
       return OwnerModel.fromMap(result.first);
     } catch (e) {
-      _logger.e('❌ Database error in getOwnerByCredentials: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ getOwnerByCredentials error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Get all owners (for super admin)
+  // 🔹 Get all owners
   Future<List<OwnerModel>> getAllOwners() async {
     try {
       final db = await _dbHelper.database;
       final result = await db.query('owners', orderBy: 'id DESC');
-      return result.map((map) => OwnerModel.fromMap(map)).toList();
+      return result.map((e) => OwnerModel.fromMap(e)).toList();
     } catch (e) {
-      _logger.e('❌ Database error in getAllOwners: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ getAllOwners error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Get approved owners
+  // 🔹 Get approved owners
   Future<List<OwnerModel>> getApprovedOwners() async {
     try {
       final db = await _dbHelper.database;
@@ -172,64 +172,162 @@ class OwnerDao {
         whereArgs: ['approved'],
         orderBy: 'id DESC',
       );
-      return result.map((map) => OwnerModel.fromMap(map)).toList();
+      return result.map((e) => OwnerModel.fromMap(e)).toList();
     } catch (e) {
-      _logger.e('❌ Database error in getApprovedOwners: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ getApprovedOwners error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Update owner record
-  Future<int> updateOwner(OwnerModel owner) async {
+  // 🔹 Get owners with uploaded receipts
+  Future<List<OwnerModel>> getOwnersWithReceipt() async {
     try {
       final db = await _dbHelper.database;
+      return await _dbHelper.executeWithRetry(() async {
+        final result = await db.query(
+          'owners',
+          where: 'receipt_image IS NOT NULL AND receipt_image != ?',
+          whereArgs: [''],
+          orderBy: 'id DESC',
+        );
+        _logger.i('📸 Found ${result.length} owners with receipts');
+        return result.map((e) => OwnerModel.fromMap(e)).toList();
+      });
+    } catch (e) {
+      _logger.e('❌ getOwnersWithReceipt error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Get all active subscription plans
+  Future<List<Map<String, dynamic>>> getSubscriptionPlans() async {
+    try {
+      final db = await _dbHelper.database;
+      return await _dbHelper.executeWithRetry(() async {
+        final result = await db.query(
+          'subscription_plans',
+          where: 'is_active = ?',
+          whereArgs: [1],
+          orderBy: 'price ASC',
+        );
+        _logger.i('📦 Loaded ${result.length} active subscription plans');
+        return result;
+      });
+    } catch (e) {
+      _logger.e('❌ getSubscriptionPlans error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Update subscription details
+  Future<int> updateOwnerSubscription({
+    required int ownerId,
+    required String subscriptionPlan,
+    required String receiptImage,
+    required double subscriptionAmount,
+    required int durationDays,
+  }) async {
+    try {
+      final db = await _dbHelper.database;
+      final endDate = DateTime.now().add(Duration(days: durationDays));
       final count = await db.update(
         'owners',
-        owner.toMap(),
-        where: 'id = ?',
-        whereArgs: [owner.id],
-      );
-
-      if (count == 0) {
-        throw DatabaseFailure('Owner not found with ID: ${owner.id}');
-      }
-
-      _logger.i('🔄 Owner updated: ${owner.id}');
-      return count;
-    } catch (e) {
-      _logger.e('❌ Database error in updateOwner: $e');
-      // ✅ USING EXCEPTIONHANDLER
-      throw ExceptionHandler.handle(e);
-    }
-  }
-
-  /// Delete owner
-  Future<int> deleteOwner(int ownerId) async {
-    try {
-      final db = await _dbHelper.database;
-      final count = await db.delete(
-        'owners',
+        {
+          'subscription_plan': subscriptionPlan,
+          'receipt_image': receiptImage,
+          'payment_date': DateTime.now().toIso8601String(),
+          'subscription_amount': subscriptionAmount,
+          'subscription_end_date': endDate.toIso8601String(),
+        },
         where: 'id = ?',
         whereArgs: [ownerId],
       );
-
-      if (count == 0) {
-        throw DatabaseFailure('Owner not found with ID: $ownerId');
-      }
-
-      _logger.i('🗑️ Owner deleted: $ownerId');
+      if (count == 0) throw DatabaseFailure('Owner not found');
+      _logger.i('💰 Updated subscription for owner=$ownerId (ends: $endDate)');
       return count;
     } catch (e) {
-      _logger.e('❌ Database error in deleteOwner: $e');
-      // ✅ USING EXCEPTIONHANDLER
+      _logger.e('❌ updateOwnerSubscription error: $e');
       throw ExceptionHandler.handle(e);
     }
   }
 
-  /// Generate a simple 6-digit activation code
+  // 🔹 Get owners with expired subscriptions
+  Future<List<OwnerModel>> getOwnersWithExpiredSubscriptions() async {
+    try {
+      final db = await _dbHelper.database;
+      final now = DateTime.now().toIso8601String();
+
+      return await _dbHelper.executeWithRetry(() async {
+        final result = await db.query(
+          'owners',
+          where:
+              'subscription_end_date IS NOT NULL AND subscription_end_date < ? AND status = ? AND is_active = ?',
+          whereArgs: [now, 'approved', 1],
+          orderBy: 'subscription_end_date ASC',
+        );
+        _logger.i('🕒 Found ${result.length} expired subscriptions');
+        return result.map((e) => OwnerModel.fromMap(e)).toList();
+      });
+    } catch (e) {
+      _logger.e('❌ getOwnersWithExpiredSubscriptions error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Deactivate expired subscriptions
+  Future<int> deactivateExpiredSubscriptions() async {
+    try {
+      final db = await _dbHelper.database;
+      final now = DateTime.now().toIso8601String();
+      return await _dbHelper.executeWithRetry(() async {
+        final count = await db.update(
+          'owners',
+          {'status': 'suspended', 'is_active': 0},
+          where:
+              'subscription_end_date IS NOT NULL AND subscription_end_date < ? AND status = ? AND is_active = ?',
+          whereArgs: [now, 'approved', 1],
+        );
+        _logger.i('🔴 Deactivated $count expired subscriptions');
+        return count;
+      });
+    } catch (e) {
+      _logger.e('❌ deactivateExpiredSubscriptions error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Get owners with subscriptions expiring soon (7 days)
+  Future<List<OwnerModel>> getOwnersWithExpiringSubscriptions() async {
+    try {
+      final db = await _dbHelper.database;
+      final now = DateTime.now();
+      final weekLater = now.add(const Duration(days: 7));
+
+      return await _dbHelper.executeWithRetry(() async {
+        final result = await db.query(
+          'owners',
+          where:
+              'subscription_end_date IS NOT NULL AND subscription_end_date BETWEEN ? AND ? AND status = ? AND is_active = ?',
+          whereArgs: [
+            now.toIso8601String(),
+            weekLater.toIso8601String(),
+            'approved',
+            1,
+          ],
+          orderBy: 'subscription_end_date ASC',
+        );
+        _logger.i('📅 Found ${result.length} expiring soon (≤7 days)');
+        return result.map((map) => OwnerModel.fromMap(map)).toList();
+      });
+    } catch (e) {
+      _logger.e('❌ getOwnersWithExpiringSubscriptions error: $e');
+      throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 Generate activation code
   String _generateActivationCode() {
     final rng = Random();
-    return (rng.nextInt(900000) + 100000).toString(); // 100000-999999
+    return (rng.nextInt(900000) + 100000).toString();
   }
 }

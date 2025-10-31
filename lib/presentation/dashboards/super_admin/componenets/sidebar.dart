@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/state_management/login/logout_controller.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/logout_controller.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
@@ -21,6 +21,10 @@ class Sidebar extends StatelessWidget {
       {'icon': Icons.group_add_rounded, 'label': 'Owner Requests'},
       {'icon': Icons.people_alt_rounded, 'label': 'Owners'},
       {'icon': Icons.bar_chart_rounded, 'label': 'Reports'},
+      {
+        'icon': Icons.subscriptions_rounded,
+        'label': 'Subscriptions',
+      }, // ✅ new screen
       {'icon': Icons.settings_rounded, 'label': 'Settings'},
     ];
 

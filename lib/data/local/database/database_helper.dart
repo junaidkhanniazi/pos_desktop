@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:logger/logger.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class DatabaseHelper {
@@ -12,126 +12,202 @@ class DatabaseHelper {
   factory DatabaseHelper() => _instance;
 
   DatabaseHelper._internal() {
-    // Initialize sqflite ffi
+    // Initialize sqflite ffi for desktop
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
 
+  Future<void> _debugTableStructure(Database db) async {
+    try {
+      print('🔍 === DEBUG: ACTUAL TABLE STRUCTURE ===');
+
+      // Check subscription_plans table
+      final subPlanInfo = await db.rawQuery(
+        'PRAGMA table_info(subscription_plans)',
+      );
+      print('📋 subscription_plans columns:');
+      for (final column in subPlanInfo) {
+        print('   ${column['name']} | ${column['type']}');
+      }
+
+      // Check if any data exists
+      final plansData = await db.query('subscription_plans');
+      print('📊 Total plans in DB: ${plansData.length}');
+      for (final plan in plansData) {
+        print('   Plan: $plan');
+      }
+
+      print('========================================');
+    } catch (e) {
+      print('❌ Error in debug: $e');
+    }
+  }
+
   Future<Database> _initDatabase() async {
     Directory dir = await getApplicationDocumentsDirectory();
     String path = join(dir.path, 'pos_system.db');
-    _logger.i('💡 Database initializing at: $path');
+    _logger.i('💡 Initializing system DB at: $path');
 
     try {
-      var db = await databaseFactory.openDatabase(
+      final db = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 2,
-          onCreate: _createTables,
+          version: 3,
+          onCreate: _createSystemTables,
+          onUpgrade: _upgradeDatabase,
           onConfigure: (db) async {
-            // Configure database for better performance
             await db.execute('PRAGMA foreign_keys = ON');
             await db.execute('PRAGMA busy_timeout = 5000');
           },
         ),
       );
-
-      _logger.i('✅ Database initialized successfully!');
+      _logger.i('✅ System database initialized!');
+      await _debugTableStructure(db);
       return db;
     } catch (e) {
-      _logger.e('❌ Database initialization failed: $e');
+      _logger.e('❌ Failed to initialize system DB: $e');
       rethrow;
     }
   }
 
-  Future<void> _createTables(Database db, int version) async {
-    _logger.i('⚙️ Creating all POS tables...');
+  // ✅ Simple retry mechanism for database locking issues
+  Future<T> executeWithRetry<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 5,
+    int baseDelay = 100,
+  }) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if ((e.toString().contains('locked') ||
+                e.toString().contains('database is locked')) &&
+            attempt < maxRetries) {
+          final delay = Duration(milliseconds: baseDelay * attempt);
+          print(
+            '🔄 Database locked, retrying in ${delay.inMilliseconds}ms (attempt $attempt/$maxRetries)',
+          );
+          await Future.delayed(delay);
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('Max retries exceeded for database operation');
+  }
 
-    // Create tables one by one (more reliable than batch)
+  // -------------------------------------------------
+  // 🔹 MASTER DB (per Owner)
+  // -------------------------------------------------
+  Future<Database> openMasterDB(int ownerId) async {
+    try {
+      final dbBase = await getDatabasesPath();
+      final ownerFolder = join(dbBase, 'owner_$ownerId');
+      await Directory(ownerFolder).create(recursive: true);
 
-    // 1️⃣ Super Admin
+      final masterPath = join(ownerFolder, 'master.db');
+      _logger.i('📂 Opening Master DB for Owner $ownerId → $masterPath');
+
+      final db = await databaseFactory.openDatabase(
+        masterPath,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (db, _) async {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS stores (
+                id INTEGER PRIMARY KEY,
+                ownerId INTEGER,
+                storeName TEXT,
+                folderPath TEXT,
+                dbPath TEXT,
+                createdAt TEXT,
+                updatedAt TEXT
+              );
+            ''');
+
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS subscription_info (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                planName TEXT,
+                startDate TEXT,
+                endDate TEXT,
+                maxStores INTEGER,
+                maxProducts INTEGER,
+                maxCategories INTEGER
+              );
+            ''');
+
+            _logger.i('✅ Master DB created for Owner $ownerId');
+          },
+        ),
+      );
+
+      return db;
+    } catch (e) {
+      _logger.e('❌ Failed to open Master DB for owner $ownerId: $e');
+      rethrow;
+    }
+  }
+
+  // -------------------------------------------------
+  // 🔹 STORE DB (per Store)
+  // -------------------------------------------------
+  Future<Database> openStoreDB(
+    int ownerId,
+    int storeId,
+    String storeName,
+  ) async {
+    try {
+      final dbBase = await getDatabasesPath();
+      final ownerFolder = join(dbBase, 'owner_$ownerId');
+      final storeFolderPath = join(ownerFolder, 'store_${storeId}_$storeName');
+      final storeFolder = Directory(storeFolderPath);
+
+      // ✅ Auto-create store folder if it doesn't exist
+      if (!storeFolder.existsSync()) {
+        await storeFolder.create(recursive: true);
+        _logger.i('📁 Created new store folder: $storeFolderPath');
+      }
+
+      final dbPath = join(storeFolder.path, '$storeName.db');
+      _logger.i('🏪 Opening store DB: $dbPath');
+
+      final db = await databaseFactory.openDatabase(
+        dbPath,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (db, _) async => createStoreTables(db),
+        ),
+      );
+
+      return db;
+    } catch (e) {
+      _logger.e('❌ Failed to open Store DB for store_$storeId: $e');
+      rethrow;
+    }
+  }
+
+  // -------------------------------------------------
+  // 🔹 STORE SCHEMA CREATION (per store)
+  // -------------------------------------------------
+  static Future<void> createStoreTables(Database db) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS super_admin (
+      CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
+        description TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
-    // 2️⃣ Owners
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS owners (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      super_admin_id INTEGER,
-      shop_name TEXT NOT NULL,
-      owner_name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      contact TEXT,
-      activation_code TEXT,
-      status TEXT DEFAULT 'pending',
-      is_active INTEGER DEFAULT 0,
-      subscription_plan TEXT,
-      receipt_image TEXT,
-      payment_date TEXT,
-      subscription_amount REAL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (super_admin_id) REFERENCES super_admin (id)
-    );
-    ''');
-    await db.execute('''
-    CREATE TABLE IF NOT EXISTS subscription_plans (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      duration_days INTEGER NOT NULL,
-      price REAL NOT NULL,
-      features TEXT,
-      is_active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-  ''');
-
-    // 3️⃣ Users
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        full_name TEXT NOT NULL,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT CHECK(role IN ('cashier','accountant','manager','admin')) DEFAULT 'cashier',
-        permissions TEXT,
-        is_active INTEGER DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES owners (id)
-      );
-    ''');
-
-    // 4️⃣ Categories
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES owners (id)
-      );
-    ''');
-
-    // 5️⃣ Products
     await db.execute('''
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
         category_id INTEGER,
         name TEXT NOT NULL,
         sku TEXT UNIQUE,
@@ -141,193 +217,143 @@ class DatabaseHelper {
         barcode TEXT,
         image_url TEXT,
         is_active INTEGER DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES owners (id),
-        FOREIGN KEY (category_id) REFERENCES categories (id)
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
-    // 6️⃣ Customers
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS customers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        phone TEXT,
-        email TEXT,
-        address TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES owners (id)
-      );
-    ''');
-
-    // 7️⃣ Sales
     await db.execute('''
       CREATE TABLE IF NOT EXISTS sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        customer_id INTEGER,
-        total_amount REAL NOT NULL,
-        payment_method TEXT CHECK(payment_method IN ('cash','card','upi','other')) DEFAULT 'cash',
-        discount REAL DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES owners (id),
-        FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (customer_id) REFERENCES customers (id)
+        total REAL,
+        payment_method TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
-    // 8️⃣ Sale Items
     await db.execute('''
       CREATE TABLE IF NOT EXISTS sale_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sale_id INTEGER NOT NULL,
-        product_id INTEGER NOT NULL,
-        quantity INTEGER NOT NULL,
-        price REAL NOT NULL,
-        total REAL NOT NULL,
-        FOREIGN KEY (sale_id) REFERENCES sales (id),
-        FOREIGN KEY (product_id) REFERENCES products (id)
+        sale_id INTEGER,
+        product_id INTEGER,
+        quantity INTEGER,
+        price REAL,
+        total REAL
       );
     ''');
 
-    // 9️⃣ Payments
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS payments (
+      CREATE TABLE IF NOT EXISTS suppliers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sale_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        method TEXT NOT NULL,
-        reference TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sale_id) REFERENCES sales (id)
+        name TEXT,
+        contact TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
-    // 🔟 Settings
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS settings (
+      CREATE TABLE IF NOT EXISTS customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT,
-        FOREIGN KEY (owner_id) REFERENCES owners (id)
+        name TEXT,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
-    _logger.i('✅ All POS tables created successfully!');
-
-    // Now create indexes AFTER tables are created
-    await _createIndexes(db);
-    await _insertDefaultPlans(db);
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        amount REAL,
+        note TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    ''');
   }
 
-  Future<void> _insertDefaultPlans(Database db) async {
-    _logger.i('📋 Inserting default subscription plans...');
+  // -------------------------------------------------
+  // 🔹 SYSTEM TABLES (Super Admin, Plans, Owners)
+  // -------------------------------------------------
+  Future<void> _createSystemTables(Database db, int version) async {
+    _logger.i('⚙️ Creating Super Admin & Core Tables...');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS super_admin (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    ''');
 
+    await db.execute('''
+  CREATE TABLE IF NOT EXISTS owners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    super_admin_id INTEGER,
+    shop_name TEXT,
+    owner_name TEXT,
+    email TEXT UNIQUE,
+    password TEXT,
+    contact TEXT,
+    activation_code TEXT,
+    status TEXT DEFAULT 'pending',
+    is_active INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    subscription_plan TEXT,
+    receipt_image TEXT,
+    payment_date TEXT,
+    subscription_amount REAL,
+    subscription_start_date TEXT,
+    subscription_end_date TEXT
+  );
+''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        duration_days INTEGER,
+        price REAL,
+        maxStores INTEGER,
+        maxProducts INTEGER,
+        maxCategories INTEGER,
+        features TEXT
+      );
+    ''');
+
+    _logger.i('✅ Core System Tables created successfully!');
+  }
+
+  // -------------------------------------------------
+  // 🔹 UPGRADE DB (System-level)
+  // -------------------------------------------------
+  Future<void> _upgradeDatabase(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    _logger.i('🔄 Upgrading system DB $oldVersion → $newVersion');
     try {
-      // Check if plans already exist
-      final existingPlans = await db.query('subscription_plans');
-      if (existingPlans.isNotEmpty) {
-        _logger.i('✅ Default plans already exist, skipping...');
-        return;
+      if (oldVersion < 3) {
+        await db.execute(
+          'ALTER TABLE owners ADD COLUMN subscription_end_date TEXT;',
+        );
+        _logger.i('✅ Added subscription_end_date to owners');
       }
-
-      // Insert default subscription plans
-      final defaultPlans = [
-        {
-          'name': 'Basic Plan',
-          'duration_days': 30,
-          'price': 2999.0,
-          'features':
-              '{"features": ["Up to 100 products", "Basic reports", "Email support", "1 user account"]}',
-          'is_active': 1,
-        },
-        {
-          'name': 'Premium Plan',
-          'duration_days': 30,
-          'price': 5999.0,
-          'features':
-              '{"features": ["Up to 500 products", "Advanced reports", "Priority support", "5 user accounts", "Inventory management"]}',
-          'is_active': 1,
-        },
-        {
-          'name': 'Enterprise Plan',
-          'duration_days': 30,
-          'price': 9999.0,
-          'features':
-              '{"features": ["Unlimited products", "Custom reports", "24/7 support", "Unlimited users", "Advanced analytics", "API access"]}',
-          'is_active': 1,
-        },
-      ];
-
-      for (final plan in defaultPlans) {
-        await db.insert('subscription_plans', plan);
-      }
-
-      _logger.i('✅ Default subscription plans inserted successfully!');
     } catch (e) {
-      _logger.e('❌ Error inserting default plans: $e');
-      // Don't rethrow - this is not critical for app startup
+      _logger.e('❌ Database upgrade failed: $e');
     }
   }
 
-  Future<void> _createIndexes(Database db) async {
-    _logger.i('📊 Creating database indexes...');
-
-    try {
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_owners_email ON owners(email);',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_owners_status ON owners(status);',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_products_owner_id ON products(owner_id);',
-      );
-
-      _logger.i('✅ Database indexes created successfully!');
-    } catch (e) {
-      _logger.w('⚠️ Index creation failed (tables might not exist yet): $e');
-      // Don't throw error for indexes - they're optional for performance
-    }
-  }
-
-  // Simple retry mechanism
-  Future<T> executeWithRetry<T>(
-    Future<T> Function() operation, {
-    int maxRetries = 3,
-  }) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (e) {
-        if (e.toString().contains('locked') && attempt < maxRetries) {
-          _logger.w('🔄 Database locked, retrying attempt $attempt...');
-          await Future.delayed(Duration(milliseconds: 200 * attempt));
-          continue;
-        }
-        rethrow;
-      }
-    }
-    throw Exception('Max retries exceeded');
-  }
-
+  // -------------------------------------------------
+  // 🔹 CLOSE DATABASE
+  // -------------------------------------------------
   Future<void> close() async {
     if (_database != null) {
       await _database!.close();
       _database = null;
       _logger.i('🔒 Database closed successfully');
     }
-  }
-
-  // Example method
-  Future<List<Map<String, dynamic>>> fetchAdmins() async {
-    final db = await database;
-    return await db.query('super_admin');
   }
 }

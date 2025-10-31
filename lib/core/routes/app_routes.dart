@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
 import 'package:pos_desktop/presentation/dashboards/accountant/accountant_dashboard.dart';
 import 'package:pos_desktop/presentation/dashboards/cashier/cashier_dashboard.dart';
 import 'package:pos_desktop/presentation/dashboards/inventory_manager/inventory_manager_dashboard.dart';
@@ -7,11 +8,16 @@ import 'package:pos_desktop/presentation/dashboards/owner/owner_dashboard.dart';
 import 'package:pos_desktop/presentation/screens/login_screen.dart';
 import 'package:pos_desktop/presentation/screens/owner_signup_screen.dart';
 import 'package:pos_desktop/presentation/screens/splash_screen.dart';
+import 'package:pos_desktop/presentation/screens/subscription_plans_screen.dart';
+import 'package:pos_desktop/presentation/screens/payment_screen.dart';
 
 class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String ownerSignup = '/owner-signup';
+  static const String subscriptionPlans = '/subscription-plans';
+  static const String payment = '/payment';
+
   static const String superAdminDashboard = '/super-admin-dashboard';
   static const String ownerDashboard = '/owner-dashboard';
   static const String cashierDashboard = '/cashier-dashboard';
@@ -31,6 +37,32 @@ class AppRouter {
 
       case AppRoutes.ownerSignup:
         return MaterialPageRoute(builder: (_) => const OwnerSignupScreen());
+
+      case AppRoutes.subscriptionPlans:
+        final args =
+            settings.arguments as Map<String, String>; // ✅ More specific type
+        return MaterialPageRoute(
+          builder: (_) => SubscriptionPlansScreen(
+            shopName: args['shopName']!,
+            ownerName: args['ownerName']!,
+            email: args['email']!,
+            password: args['password']!,
+            contact: args['contact']!,
+          ),
+        );
+
+      case AppRoutes.payment:
+        final args = settings.arguments as Map<String, dynamic>;
+        return MaterialPageRoute(
+          builder: (_) => PaymentScreen(
+            shopName: args['shopName'] as String,
+            ownerName: args['ownerName'] as String,
+            email: args['email'] as String,
+            password: args['password'] as String,
+            contact: args['contact'] as String,
+            selectedPlan: args['selectedPlan'] as SubscriptionPlanEntity,
+          ),
+        );
 
       case AppRoutes.superAdminDashboard:
         return MaterialPageRoute(builder: (_) => const SuperAdminDashboard());

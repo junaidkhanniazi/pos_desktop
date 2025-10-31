@@ -1,164 +1,24 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
-import 'package:pos_desktop/core/utils/date_utils.dart'; // ✅ ADDED
-import 'package:pos_desktop/presentation/widgets/app_loader.dart'; // ✅ ADDED
+import 'package:pos_desktop/presentation/state_management/controllers/owner_requests_controller.dart';
+import 'package:pos_desktop/presentation/widgets/app_loader.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
-import 'package:pos_desktop/data/local/dao/owner_dao.dart';
-import 'package:pos_desktop/data/models/owner_model.dart';
+import 'package:pos_desktop/domain/entities/owner_entity.dart';
 
-class OwnerRequestsScreen extends StatefulWidget {
-  const OwnerRequestsScreen({super.key});
+class OwnerRequestsScreen extends StatelessWidget {
+  OwnerRequestsScreen({super.key});
 
-  @override
-  State<OwnerRequestsScreen> createState() => _OwnerRequestsScreenState();
-}
+  final OwnerRequestsController controller = Get.put(OwnerRequestsController());
 
-class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
-  final OwnerDao _ownerDao = OwnerDao();
-  List<OwnerModel> _pendingOwners = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPendingOwners();
-  }
-
-  Future<void> _loadPendingOwners() async {
-    try {
-      setState(() => _isLoading = true);
-      final owners = await _ownerDao.getPendingOwners();
-      setState(() {
-        _pendingOwners = owners;
-      });
-    } catch (e) {
-      AppToast.show(
-        context,
-        message: 'Failed to load owner requests',
-        type: ToastType.error,
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _approveOwner(OwnerModel owner) {
+  // ✅ Activation Code Dialog
+  void _showActivationDialog(BuildContext context, String name, String code) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Approve Owner", style: AppText.h2),
-        content: Text(
-          "Are you sure you want to approve '${owner.ownerName}'?\n\n"
-          "This will generate an activation code for them.",
-          style: AppText.body.copyWith(color: AppColors.textMedium),
-        ),
-        actions: [
-          AppButton(
-            label: "Cancel",
-            onPressed: () => Navigator.pop(context),
-            isPrimary: false,
-          ),
-          AppButton(
-            label: "Approve",
-            icon: Icons.verified_user,
-            onPressed: () async {
-              Navigator.pop(context);
-              await _processApproval(owner);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _processApproval(OwnerModel owner) async {
-    try {
-      // Activate owner in database - this generates activation code
-      await _ownerDao.activateOwner(owner.id!);
-
-      // Reload the list to get updated owner with activation code
-      await _loadPendingOwners();
-
-      // Find the updated owner with activation code
-      final updatedOwners = await _ownerDao.getAllOwners();
-      final updatedOwner = updatedOwners.firstWhere((o) => o.id == owner.id);
-
-      _showActivationDialog(
-        updatedOwner.ownerName,
-        updatedOwner.activationCode!,
-      );
-
-      AppToast.show(
-        context,
-        message: 'Owner approved successfully!',
-        type: ToastType.success,
-      );
-    } catch (e) {
-      AppToast.show(
-        context,
-        message: 'Failed to approve owner: $e',
-        type: ToastType.error,
-      );
-    }
-  }
-
-  void _rejectOwner(OwnerModel owner) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Reject Owner", style: AppText.h2),
-        content: Text(
-          "Are you sure you want to reject '${owner.ownerName}'?",
-          style: AppText.body.copyWith(color: AppColors.textMedium),
-        ),
-        actions: [
-          AppButton(
-            label: "Cancel",
-            onPressed: () => Navigator.pop(context),
-            isPrimary: false,
-          ),
-          AppButton(
-            label: "Reject",
-            icon: Icons.close,
-            onPressed: () async {
-              Navigator.pop(context);
-              await _processRejection(owner);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _processRejection(OwnerModel owner) async {
-    try {
-      await _ownerDao.rejectOwner(owner.id!);
-      await _loadPendingOwners();
-
-      AppToast.show(
-        context,
-        message: 'Owner rejected successfully!',
-        type: ToastType.success,
-      );
-    } catch (e) {
-      AppToast.show(
-        context,
-        message: 'Failed to reject owner: $e',
-        type: ToastType.error,
-      );
-    }
-  }
-
-  void _showActivationDialog(String name, String code) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text("Activation Code Generated", style: AppText.h2),
@@ -200,15 +60,94 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
     );
   }
 
-  String _formatDate(String? dateString) {
-    if (dateString == null) return 'N/A';
-    try {
-      final date = DateTime.parse(dateString);
-      // ✅ USING DATEUTILSHELPER
-      return DateUtilsHelper.format(date);
-    } catch (e) {
-      return 'N/A';
-    }
+  void _showReceiptPreview(BuildContext context, String imagePath) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadow.withOpacity(0.3),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Payment Receipt",
+                    style: AppText.h2.copyWith(color: AppColors.textDark),
+                  ),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      File(imagePath),
+                      fit: BoxFit.contain,
+                      width: 600,
+                      height: 400,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 300,
+                        alignment: Alignment.center,
+                        color: AppColors.background,
+                        child: Text(
+                          "Receipt not found",
+                          style: AppText.body.copyWith(
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  AppButton(
+                    label: "Close",
+                    width: 180,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionDetails(OwnerEntity owner) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Subscription: ${owner.subscriptionPlan ?? 'N/A'}",
+            style: AppText.body.copyWith(fontWeight: FontWeight.w600),
+          ),
+          if (owner.subscriptionAmount != null)
+            Text(
+              "Amount: Rs. ${owner.subscriptionAmount}",
+              style: AppText.small,
+            ),
+          if (owner.paymentDate != null)
+            Text("Paid on: ${owner.paymentDate}", style: AppText.small),
+        ],
+      ),
+    );
   }
 
   @override
@@ -223,147 +162,152 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
             style: AppText.h1.copyWith(color: AppColors.textDark),
           ),
           const SizedBox(height: 24),
-
-          // 🧾 Table container
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.shadow.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+            child: Obx(() {
+              if (controller.isLoading.value) {
+                return const AppLoader(message: "Loading owner requests...");
+              }
+
+              if (controller.pendingOwners.isEmpty) {
+                return Center(
+                  child: Text(
+                    "No pending owner requests",
+                    style: AppText.body.copyWith(color: AppColors.textLight),
                   ),
-                ],
-              ),
-              child: _isLoading
-                  ? const AppLoader(
-                      message: "Loading owner requests...",
-                    ) // ✅ USING APP_LOADER
-                  : _pendingOwners.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No pending owner requests",
-                        style: AppText.body.copyWith(
-                          color: AppColors.textLight,
-                        ),
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(
-                          AppColors.background,
-                        ),
-                        headingTextStyle: AppText.body.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
-                        ),
-                        columns: const [
-                          DataColumn(label: Text("Name")),
-                          DataColumn(label: Text("Email")),
-                          DataColumn(label: Text("Store")),
-                          DataColumn(label: Text("Date")),
-                          DataColumn(label: Text("Status")),
-                          DataColumn(label: Text("Actions")),
-                        ],
-                        rows: _pendingOwners.map((owner) {
-                          final status = owner.status;
-                          Color badgeColor;
-                          String statusText;
+                );
+              }
 
-                          switch (status) {
-                            case "approved":
-                              badgeColor = AppColors.success;
-                              statusText = "Approved";
-                              break;
-                            case "rejected":
-                              badgeColor = AppColors.error;
-                              statusText = "Rejected";
-                              break;
-                            default:
-                              badgeColor = AppColors.warning;
-                              statusText = "Pending";
-                          }
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                Text(owner.ownerName, style: AppText.body),
-                              ),
-                              DataCell(Text(owner.email, style: AppText.body)),
-                              DataCell(
-                                Text(owner.shopName, style: AppText.body),
-                              ),
-                              DataCell(
-                                Text(
-                                  _formatDate(owner.createdAt),
-                                  style: AppText.small,
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(
+                    AppColors.background,
+                  ),
+                  headingTextStyle: AppText.body.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark,
+                  ),
+                  columns: const [
+                    DataColumn(label: Text("Name")),
+                    DataColumn(label: Text("Email")),
+                    DataColumn(label: Text("Store")),
+                    DataColumn(label: Text("Subscription")),
+                    DataColumn(label: Text("Receipt")),
+                    DataColumn(label: Text("Status")),
+                    DataColumn(label: Text("Actions")),
+                  ],
+                  rows: controller.pendingOwners.map((owner) {
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(owner.name, style: AppText.body)),
+                        DataCell(Text(owner.email, style: AppText.body)),
+                        DataCell(Text(owner.storeName, style: AppText.body)),
+                        DataCell(
+                          Text(
+                            owner.subscriptionPlan ?? "No Plan",
+                            style: AppText.small,
+                          ),
+                        ),
+                        DataCell(
+                          owner.hasReceipt
+                              ? TextButton.icon(
+                                  icon: const Icon(
+                                    Icons.visibility,
+                                    color: AppColors.primary,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: badgeColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(20),
+                                  label: const Text(
+                                    "View",
+                                    style: TextStyle(color: AppColors.primary),
                                   ),
-                                  child: Text(
-                                    statusText,
-                                    style: AppText.small.copyWith(
-                                      color: badgeColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  onPressed: () => _showReceiptPreview(
+                                    context,
+                                    owner.receiptImage!,
+                                  ),
+                                )
+                              : Text(
+                                  "N/A",
+                                  style: AppText.small.copyWith(
+                                    color: AppColors.textLight,
                                   ),
                                 ),
-                              ),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    if (status == "pending") ...[
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.check_circle,
-                                          color: AppColors.success,
-                                        ),
-                                        tooltip: "Approve",
-                                        onPressed: () => _approveOwner(owner),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.cancel_rounded,
-                                          color: AppColors.error,
-                                        ),
-                                        tooltip: "Reject",
-                                        onPressed: () => _rejectOwner(owner),
-                                      ),
-                                    ],
-                                    if (status == "approved" &&
-                                        owner.activationCode != null)
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.key_rounded,
-                                          color: AppColors.primary,
-                                        ),
-                                        tooltip: "View Code",
-                                        onPressed: () => _showActivationDialog(
-                                          owner.ownerName,
-                                          owner.activationCode!,
-                                        ),
-                                      ),
-                                  ],
+                        ),
+                        DataCell(
+                          Text(
+                            owner.status.name,
+                            style: AppText.small.copyWith(
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Row(
+                            children: [
+                              if (owner.status == OwnerStatus.pending) ...[
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.success,
+                                  ),
+                                  tooltip: "Approve",
+                                  onPressed: () async {
+                                    final updatedOwner = await controller
+                                        .approveOwner(owner);
+                                    if (updatedOwner != null &&
+                                        updatedOwner.activationCode != null) {
+                                      _showActivationDialog(
+                                        context,
+                                        updatedOwner.name,
+                                        updatedOwner.activationCode!,
+                                      );
+                                      AppToast.show(
+                                        context,
+                                        message: "Owner approved successfully!",
+                                        type: ToastType.success,
+                                      );
+                                    } else {
+                                      AppToast.show(
+                                        context,
+                                        message:
+                                            "Failed to approve owner or missing code.",
+                                        type: ToastType.error,
+                                      );
+                                    }
+                                  },
                                 ),
-                              ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.cancel_rounded,
+                                    color: AppColors.error,
+                                  ),
+                                  tooltip: "Reject",
+                                  onPressed: () async {
+                                    final success = await controller
+                                        .rejectOwner(owner);
+                                    if (success) {
+                                      AppToast.show(
+                                        context,
+                                        message: "Owner rejected successfully.",
+                                        type: ToastType.success,
+                                      );
+                                    } else {
+                                      AppToast.show(
+                                        context,
+                                        message: "Failed to reject owner.",
+                                        type: ToastType.error,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
                             ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              );
+            }),
           ),
         ],
       ),
