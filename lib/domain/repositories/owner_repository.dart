@@ -5,7 +5,11 @@ abstract class OwnerRepository {
   Future<List<OwnerEntity>> getPendingOwners();
   Future<List<OwnerEntity>> getApprovedOwners();
   Future<void> addOwner(OwnerEntity owner);
-  Future<void> activateOwner(String ownerId);
+  Future<void> activateOwner(
+    String ownerId,
+    String superAdminId,
+    int durationDays,
+  );
   Future<void> rejectOwner(String ownerId);
   Future<void> deleteOwner(String ownerId);
   Future<OwnerEntity?> getOwnerByCredentials(

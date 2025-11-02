@@ -48,12 +48,15 @@ class LoginController {
       final role = await _useCase(email, password);
 
       switch (role) {
-        /// 🧩 SUPER ADMIN LOGIN
         case AuthRole.superAdmin:
-          await AuthStorageHelper.saveLogin(
-            role: AuthRole.superAdmin,
-            email: email,
-          );
+          final adminResult = await SuperAdminDao().login(email, password);
+          if (adminResult != null) {
+            await AuthStorageHelper.saveLogin(
+              role: AuthRole.superAdmin,
+              email: email,
+              adminId: adminResult['id'].toString(),
+            );
+          }
           if (!context.mounted) return;
           AppToast.show(
             context,
@@ -66,12 +69,65 @@ class LoginController {
           );
           break;
 
-        /// 🧩 OWNER LOGIN (requires activation)
         case AuthRole.owner:
-          _showActivationDialog(context, email, password);
+          try {
+            // First check if owner exists and subscription status
+            final ownerDao = OwnerDao();
+            final owner = await ownerDao.getOwnerByCredentials(email, password);
+
+            if (owner != null) {
+              if (owner.isSubscriptionExpired) {
+                // Subscription expired error message
+                AppToast.show(
+                  context,
+                  message:
+                      'Your subscription has expired. Please renew to continue.',
+                  type: ToastType.error,
+                );
+                return; // Prevent login
+              }
+
+              if (owner.isSubscriptionExpiringSoon) {
+                final daysLeft = DateTime.parse(
+                  owner.subscriptionEndDate!,
+                ).difference(DateTime.now()).inDays;
+                if (!context.mounted) return;
+                AppToast.show(
+                  context,
+                  message:
+                      'Your subscription expires in $daysLeft days. Please renew soon.',
+                  type: ToastType.warning,
+                );
+              }
+
+              await AuthStorageHelper.saveLogin(
+                role: AuthRole.owner,
+                email: email,
+              );
+
+              _showActivationDialog(context, email, password);
+            }
+          } catch (e) {
+            // Check if the error is related to expired subscription
+            if (e.toString().contains('subscription has expired')) {
+              AppToast.show(
+                context,
+                message:
+                    'Your subscription has expired. Please renew to continue.',
+                type: ToastType.error,
+              );
+            } else {
+              // Handle other errors
+              AppToast.show(
+                context,
+                message: 'Owner login failed: ${e.toString()}',
+                type: ToastType.error,
+              );
+            }
+            return;
+          }
           break;
 
-        /// 🧩 STAFF LOGIN (role-based navigation)
         case AuthRole.staff:
           final staffRole = await AuthStorageHelper.getStaffRole() ?? 'cashier';
           if (!context.mounted) return;
@@ -110,7 +166,15 @@ class LoginController {
       }
     } catch (e) {
       if (!context.mounted) return;
-      AppToast.show(context, message: e.toString(), type: ToastType.error);
+
+      // Only show error if it's not already handled (like expired subscription)
+      if (!e.toString().contains('subscription has expired')) {
+        AppToast.show(
+          context,
+          message: 'Subscription has expired. Please renew to continue.',
+          type: ToastType.error,
+        );
+      }
     } finally {
       _isLoading = false;
     }
@@ -194,13 +258,33 @@ class LoginController {
       );
 
       if (verified != null) {
-        await AuthStorageHelper.saveLogin(
-          role: AuthRole.owner, // ✅ FIXED — correct role now
-          email: email,
-        );
+        if (verified.isSubscriptionExpired) {
+          AppToast.show(
+            context,
+            message: 'Your subscription has expired. Please renew to continue.',
+            type: ToastType.error,
+          );
+          return; // Stop activation if expired
+        }
+
+        await AuthStorageHelper.saveLogin(role: AuthRole.owner, email: email);
 
         if (!context.mounted) return;
         Navigator.pop(context);
+
+        if (verified.isSubscriptionExpiringSoon) {
+          final daysLeft = DateTime.parse(
+            verified.subscriptionEndDate!,
+          ).difference(DateTime.now()).inDays;
+
+          AppToast.show(
+            context,
+            message:
+                'Your subscription expires in $daysLeft days. Please renew soon.',
+            type: ToastType.warning,
+          );
+        }
+
         AppToast.show(
           context,
           message: "Owner login successful!",
@@ -215,12 +299,19 @@ class LoginController {
         );
       }
     } catch (e) {
-      if (!context.mounted) return;
-      AppToast.show(
-        context,
-        message: "Login failed: $e",
-        type: ToastType.error,
-      );
+      if (e.toString().contains('subscription has expired')) {
+        AppToast.show(
+          context,
+          message: 'Your subscription has expired. Please renew to continue.',
+          type: ToastType.error,
+        );
+      } else {
+        AppToast.show(
+          context,
+          message: "Login failed: $e",
+          type: ToastType.error,
+        );
+      }
     }
   }
 

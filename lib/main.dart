@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_theme.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
+import 'package:pos_desktop/data/local/dao/owner_dao.dart' show OwnerDao;
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/local/dao/super_admin_dao.dart';
 import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
@@ -14,11 +15,16 @@ void main() async {
 
   // ✅ Ensure Super Admin exists
   final superAdminDao = SuperAdminDao();
+  final ownerDao = OwnerDao();
+  await ownerDao.expireOwnerNow(9);
+  await ownerDao.createTestExpiredOwner();
   await superAdminDao.insertSuperAdmin(
     name: 'System Admin',
     email: 'admin@pos.app',
     password: 'admin123',
   );
+  await dbHelper.testNewStructure();
+  await dbHelper.createMultipleStoresTest();
 
   // ✅ Initialize Subscription Plans Table only
   final subscriptionPlanDao = SubscriptionPlanDao(database);

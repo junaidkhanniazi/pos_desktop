@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart'; // ✅ ADD THIS
+import 'package:pos_desktop/core/utils/toast_helper.dart'; // ✅ ADD THIS
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/domain/repositories/repositories_impl/auth_repository_impl.dart';
 import 'package:pos_desktop/domain/usecases/login_usecase.dart';
@@ -23,7 +25,6 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // ✅ Initialize with repository
     _loginUseCase = LoginUseCase(
       AuthRepositoryImpl(SuperAdminDao(), OwnerDao(), UserDao()),
     );
@@ -32,19 +33,46 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    await Future.delayed(const Duration(seconds: 1)); // smooth splash delay
+    await Future.delayed(const Duration(seconds: 1));
 
-    // ✅ Check saved login role
+    // ✅ FIRST CHECK IF SUBSCRIPTION EXPIRED AND AUTO LOGOUT
+    final shouldRedirect = await AuthStorageHelper.shouldRedirectToLogin();
+
+    if (shouldRedirect && mounted) {
+      // Subscription expired, show message and go to login
+      _showExpirationMessageAndRedirect();
+      return;
+    }
+
+    // ✅ THEN CHECK SAVED LOGIN ROLE (NORMAL FLOW)
     final role = await LoginUseCase.checkAutoLogin();
 
     if (!mounted) return;
 
-    // ✅ Navigate based on saved role
     if (role != null) {
       _navigateToRole(context, role);
     } else {
       Navigator.pushReplacementNamed(context, AppRoutes.login);
     }
+  }
+
+  // ✅ SHOW EXPIRATION MESSAGE AND REDIRECT TO LOGIN
+  void _showExpirationMessageAndRedirect() {
+    // Show expiration message
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppToast.show(
+        context,
+        message: 'Your subscription has expired. Please renew to continue.',
+        type: ToastType.error,
+      );
+    });
+
+    // Redirect to login after short delay
+    Future.delayed(Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
+      }
+    });
   }
 
   void _navigateToRole(BuildContext context, AuthRole role) {
@@ -56,7 +84,6 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.ownerDashboard);
         break;
       case AuthRole.staff:
-        // ⚠️ For now default to cashier, can later refine using saved staff subrole
         Navigator.pushReplacementNamed(context, AppRoutes.cashierDashboard);
         break;
     }

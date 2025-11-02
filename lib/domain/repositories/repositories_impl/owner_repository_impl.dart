@@ -38,15 +38,17 @@ class OwnerRepositoryImpl implements OwnerRepository {
   }
 
   @override
-  Future<void> activateOwner(String ownerId) async {
-    try {
-      print("🔄 Attempting to activate owner with ID: $ownerId");
-      await _ownerDao.activateOwner(int.parse(ownerId));
-      print("✅ Owner with ID $ownerId activated successfully!");
-    } catch (e) {
-      print("❌ Error activating owner with ID $ownerId: $e");
-      throw Exception("Error activating owner: $e");
-    }
+  // ✅ NEW - With all required parameters
+  Future<void> activateOwner(
+    String ownerId,
+    String superAdminId,
+    int durationDays,
+  ) async {
+    await _ownerDao.activateOwner(
+      int.parse(ownerId),
+      int.parse(superAdminId),
+      durationDays,
+    );
   }
 
   @override

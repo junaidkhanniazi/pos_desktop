@@ -5,7 +5,12 @@ class ActivateOwnerUseCase {
 
   ActivateOwnerUseCase(this._repository);
 
-  Future<void> call(String ownerId) async {
-    await _repository.activateOwner(ownerId);
+  // ✅ UPDATED - 3 parameters
+  Future<void> call(
+    String ownerId,
+    String superAdminId,
+    int durationDays,
+  ) async {
+    await _repository.activateOwner(ownerId, superAdminId, durationDays);
   }
 }
