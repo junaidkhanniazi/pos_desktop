@@ -26,7 +26,7 @@ class DatabaseHelper {
     });
   }
 
-  // 🔹 FIXED: Remove nested synchronization to prevent deadlock
+  // Retry logic for locked database
   Future<T> executeWithRetry<T>(
     Future<T> Function() operation, {
     int maxRetries = 5,
@@ -52,34 +52,7 @@ class DatabaseHelper {
     throw Exception('Max retries exceeded for database operation');
   }
 
-  Future<void> _debugTableStructure(Database db) async {
-    try {
-      print('🔍 === DEBUG: ACTUAL TABLE STRUCTURE ===');
-
-      // Check subscription_plans table
-      final subPlanInfo = await db.rawQuery(
-        'PRAGMA table_info(subscription_plans)',
-      );
-      print('📋 subscription_plans columns:');
-      for (final column in subPlanInfo) {
-        print('   ${column['name']} | ${column['type']}');
-      }
-
-      // Check if any data exists
-      final plansData = await db.query('subscription_plans');
-      print('📊 Total plans in DB: ${plansData.length}');
-      for (final plan in plansData) {
-        print('   Plan: $plan');
-      }
-
-      print('========================================');
-    } catch (e) {
-      print('❌ Error in debug: $e');
-    }
-  }
-
   Future<Database> _initDatabase() async {
-    // ✅ CREATE Pos_Desktop FOLDER IN DOCUMENTS
     Directory documentsDir = await getApplicationDocumentsDirectory();
     Directory posDesktopFolder = Directory(
       join(documentsDir.path, 'Pos_Desktop'),
@@ -90,7 +63,6 @@ class DatabaseHelper {
       _logger.i('📁 Created Pos_Desktop folder: ${posDesktopFolder.path}');
     }
 
-    // ✅ SYSTEM DB IN Pos_Desktop FOLDER
     final String path = join(posDesktopFolder.path, 'pos_system.db');
     _logger.i('💡 Initializing system DB at: $path');
 
@@ -110,7 +82,6 @@ class DatabaseHelper {
         ),
       );
       _logger.i('✅ System database initialized!');
-      await _debugTableStructure(db);
       return db;
     } catch (e) {
       _logger.e('❌ Failed to initialize system DB: $e');
@@ -118,25 +89,19 @@ class DatabaseHelper {
     }
   }
 
-  // -------------------------------------------------
-  // 🔹 MASTER DB (per Owner) - UPDATED WITH OWNER NAME
-  // -------------------------------------------------
+  // ======================================================
+  // MASTER DB (per Owner)
+  // ======================================================
   Future<Database> openMasterDB(int ownerId, String ownerName) async {
     try {
-      // ✅ Pos_Desktop FOLDER IN DOCUMENTS
       final documentsDir = await getApplicationDocumentsDirectory();
       final posDesktopFolder = Directory(
         join(documentsDir.path, 'Pos_Desktop'),
       );
-
-      // ✅ pos_data FOLDER INSIDE Pos_Desktop
       final posDataFolder = join(posDesktopFolder.path, 'pos_data');
-
-      // ✅ OWNER FOLDER INSIDE pos_data
       final ownerFolder = join(posDataFolder, ownerName.toLowerCase());
       await Directory(ownerFolder).create(recursive: true);
 
-      // ✅ MASTER DB PATH
       final masterPath = join(
         ownerFolder,
         '${ownerName.toLowerCase()}_master.db',
@@ -149,16 +114,16 @@ class DatabaseHelper {
           version: 1,
           onCreate: (db, _) async {
             await db.execute('''
-            CREATE TABLE IF NOT EXISTS stores (
-              id INTEGER PRIMARY KEY,
-              ownerId INTEGER,
-              storeName TEXT,
-              folderPath TEXT,
-              dbPath TEXT,
-              createdAt TEXT,
-              updatedAt TEXT
-            );
-          ''');
+              CREATE TABLE IF NOT EXISTS stores (
+                id INTEGER PRIMARY KEY,
+                ownerId INTEGER,
+                storeName TEXT,
+                folderPath TEXT,
+                dbPath TEXT,
+                createdAt TEXT,
+                updatedAt TEXT
+              );
+            ''');
             _logger.i('✅ Master DB created for $ownerName');
           },
         ),
@@ -170,9 +135,9 @@ class DatabaseHelper {
     }
   }
 
-  // -------------------------------------------------
-  // 🔹 STORE DB (per Store) - UPDATED WITH OWNER NAME
-  // -------------------------------------------------
+  // ======================================================
+  // STORE DB (per Store)
+  // ======================================================
   Future<Database> openStoreDB(
     int ownerId,
     String ownerName,
@@ -180,19 +145,13 @@ class DatabaseHelper {
     String storeName,
   ) async {
     try {
-      // ✅ Pos_Desktop FOLDER IN DOCUMENTS
       final documentsDir = await getApplicationDocumentsDirectory();
       final posDesktopFolder = Directory(
         join(documentsDir.path, 'Pos_Desktop'),
       );
-
-      // ✅ pos_data FOLDER
       final posDataFolder = join(posDesktopFolder.path, 'pos_data');
-
-      // ✅ OWNER FOLDER
       final ownerFolder = join(posDataFolder, ownerName.toLowerCase());
 
-      // ✅ STORE FOLDER (Store Name se - junaid_tailor, junaid_sweets, etc.)
       final safeStoreName = storeName.toLowerCase().replaceAll(' ', '_');
       final storeFolderPath = join(
         ownerFolder,
@@ -205,15 +164,21 @@ class DatabaseHelper {
         _logger.i('📁 Created new store folder: $storeFolderPath');
       }
 
-      // ✅ STORE DB PATH (Simple store.db filename)
       final dbPath = join(storeFolder.path, 'store.db');
       _logger.i('🏪 Opening store DB: $dbPath');
 
       final db = await databaseFactory.openDatabase(
         dbPath,
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2, // ⬅️ bumped version for sync columns
           onCreate: (db, _) async => createStoreTables(db),
+          onUpgrade: (db, oldV, newV) async => upgradeStoreDb(db, oldV, newV),
+          onConfigure: (db) async {
+            await db.execute('PRAGMA foreign_keys = ON');
+            await db.execute('PRAGMA busy_timeout = 10000');
+            await db.execute('PRAGMA journal_mode = WAL');
+            await db.execute('PRAGMA synchronous = NORMAL');
+          },
         ),
       );
       return db;
@@ -223,15 +188,17 @@ class DatabaseHelper {
     }
   }
 
-  // -------------------------------------------------
-  // 🔹 STORE SCHEMA CREATION (per store)
-  // -------------------------------------------------
+  // ======================================================
+  // STORE TABLES (Sync-ready)
+  // ======================================================
   static Future<void> createStoreTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         description TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
@@ -248,6 +215,8 @@ class DatabaseHelper {
         barcode TEXT,
         image_url TEXT,
         is_active INTEGER DEFAULT 1,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
@@ -257,6 +226,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         total REAL,
         payment_method TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
@@ -268,7 +239,9 @@ class DatabaseHelper {
         product_id INTEGER,
         quantity INTEGER,
         price REAL,
-        total REAL
+        total REAL,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
 
@@ -277,6 +250,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         contact TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
@@ -288,6 +263,8 @@ class DatabaseHelper {
         phone TEXT,
         email TEXT,
         address TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
@@ -298,14 +275,78 @@ class DatabaseHelper {
         title TEXT,
         amount REAL,
         note TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sync_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        last_push_at TEXT,
+        last_pull_at TEXT
       );
     ''');
   }
 
-  // -------------------------------------------------
-  // 🔹 SYSTEM TABLES (Super Admin, Plans, Owners)
-  // -------------------------------------------------
+  // ======================================================
+  // STORE DB MIGRATION (add sync columns if missing)
+  // ======================================================
+  Future<bool> _columnExists(Database db, String table, String column) async {
+    final res = await db.rawQuery('PRAGMA table_info($table)');
+    for (final row in res) {
+      if ((row['name'] as String).toLowerCase() == column.toLowerCase()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _ensureSyncColumns(Database db, String table) async {
+    if (!await _columnExists(db, table, 'is_synced')) {
+      await db.execute(
+        'ALTER TABLE $table ADD COLUMN is_synced INTEGER DEFAULT 0;',
+      );
+    }
+    if (!await _columnExists(db, table, 'last_updated')) {
+      await db.execute(
+        'ALTER TABLE $table ADD COLUMN last_updated TEXT DEFAULT CURRENT_TIMESTAMP;',
+      );
+    }
+  }
+
+  Future<void> upgradeStoreDb(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) {
+      final tables = [
+        'categories',
+        'products',
+        'sales',
+        'sale_items',
+        'suppliers',
+        'customers',
+        'expenses',
+      ];
+      for (final t in tables) {
+        await _ensureSyncColumns(db, t);
+      }
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_metadata (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          last_push_at TEXT,
+          last_pull_at TEXT
+        );
+      ''');
+    }
+  }
+
+  // ======================================================
+  // SYSTEM TABLES (Super Admin / Owners)
+  // ======================================================
   Future<void> _createSystemTables(Database db, int version) async {
     _logger.i('⚙️ Creating Super Admin & Core Tables...');
     await db.execute('''
@@ -356,9 +397,6 @@ class DatabaseHelper {
     _logger.i('✅ Core System Tables created successfully!');
   }
 
-  // -------------------------------------------------
-  // 🔹 UPGRADE DB (System-level)
-  // -------------------------------------------------
   Future<void> _upgradeDatabase(
     Database db,
     int oldVersion,
@@ -377,59 +415,35 @@ class DatabaseHelper {
     }
   }
 
-  // -------------------------------------------------
-  // 🔹 DEBUG COMPLETE STRUCTURE
-  // -------------------------------------------------
-  // Future<void> debugCompleteStructure() async {
-  //   try {
-  //     final appDataDir = await getApplicationSupportDirectory();
-  //     final posDesktopFolder = Directory(join(appDataDir.path, 'Pos_Desktop'));
+  // ======================================================
+  // DEBUGGING HELPERS
+  // ======================================================
+  Future<void> debugStoreSchema(Database db) async {
+    final tables = [
+      'categories',
+      'products',
+      'sales',
+      'sale_items',
+      'suppliers',
+      'customers',
+      'expenses',
+      'sync_metadata',
+    ];
+    print('🔎 === STORE DB SCHEMA ===');
+    for (final t in tables) {
+      try {
+        final info = await db.rawQuery('PRAGMA table_info($t)');
+        print('📋 $t:');
+        for (final c in info) {
+          print('   - ${c['name']} | ${c['type']}');
+        }
+      } catch (_) {
+        print('   (not found)');
+      }
+    }
+    print('==========================');
+  }
 
-  //     print('=== COMPLETE DATABASE STRUCTURE ===');
-  //     print('App Data Path: $appDataDir');
-
-  //     if (await posDesktopFolder.exists()) {
-  //       print('📁 Pos_Desktop Folder: EXISTS');
-  //       final entities = posDesktopFolder.listSync();
-
-  //       for (var entity in entities) {
-  //         if (entity is Directory) {
-  //           final ownerName = entity.path.split(Platform.pathSeparator).last;
-  //           print('  👤 Owner: $ownerName');
-
-  //           final ownerFiles = entity.listSync();
-  //           for (var file in ownerFiles) {
-  //             if (file is File) {
-  //               print('    📄 ${file.path.split(Platform.pathSeparator).last}');
-  //             } else if (file is Directory) {
-  //               final storeName = file.path.split(Platform.pathSeparator).last;
-  //               print('    🏪 Store: $storeName');
-  //               final storeFiles = file.listSync();
-  //               for (var storeFile in storeFiles) {
-  //                 if (storeFile is File) {
-  //                   print(
-  //                     '      📄 ${storeFile.path.split(Platform.pathSeparator).last}',
-  //                   );
-  //                 }
-  //               }
-  //             }
-  //           }
-  //         } else if (entity is File) {
-  //           print('  📄 ${entity.path.split(Platform.pathSeparator).last}');
-  //         }
-  //       }
-  //     } else {
-  //       print('❌ Pos_Desktop Folder: NOT FOUND');
-  //     }
-  //     print('==================================');
-  //   } catch (e) {
-  //     print('❌ Error debugging structure: $e');
-  //   }
-  // }
-
-  // -------------------------------------------------
-  // 🔹 CLOSE DATABASE
-  // -------------------------------------------------
   Future<void> close() async {
     await _lock.synchronized(() async {
       if (_database != null) {
@@ -440,231 +454,6 @@ class DatabaseHelper {
     });
   }
 
-  // DatabaseHelper mein yeh method add karen
-  Future<void> testNewStructure() async {
-    try {
-      print('=== TESTING NEW DATABASE STRUCTURE ===');
-
-      // 1. System DB check
-      final systemDb = await database;
-      print('✅ 1. System DB working');
-
-      // 2. Multiple owners ke liye test karen
-      final owners = [
-        {"id": 8, "name": "junaid"},
-        {"id": 9, "name": "hammad"},
-        {"id": 10, "name": "hashim"},
-      ];
-
-      for (final owner in owners) {
-        final ownerId = owner["id"] as int;
-        final ownerName = owner["name"] as String;
-
-        // Master DB create karen each owner ke liye
-        final masterDb = await openMasterDB(ownerId, ownerName);
-        print('✅ Master DB created for $ownerName');
-
-        // Each owner ke liye different stores create karen
-        final stores = _getStoresForOwner(ownerName);
-        for (int i = 0; i < stores.length; i++) {
-          final storeDb = await openStoreDB(
-            ownerId,
-            ownerName,
-            i + 1,
-            stores[i],
-          );
-          await storeDb.close();
-          print('✅ Store created for $ownerName: ${stores[i]}');
-        }
-        await masterDb.close();
-      }
-
-      // 3. Structure debug karen
-      await debugCompleteStructure();
-
-      print('🎉 ALL TESTS PASSED! New structure working with multiple owners.');
-    } catch (e) {
-      print('❌ TEST FAILED: $e');
-    }
-  }
-
-  // Helper method for different stores for different owners
-  List<String> _getStoresForOwner(String ownerName) {
-    switch (ownerName) {
-      case "junaid":
-        return ["junaid_tailor", "junaid_sweets", "junaid_traders"];
-      case "hammad":
-        return ["hammad_electronics", "hammad_mobiles"];
-      case "hashim":
-        return ["hashim_warehouse", "hashim_wholesale"];
-      default:
-        return ["main_store"];
-    }
-  }
-
-  // DatabaseHelper mein yeh method add karen
-  Future<void> createMultipleStoresTest() async {
-    try {
-      print('=== CREATING MULTIPLE STORES FOR MULTIPLE OWNERS ===');
-
-      // 1. Pehle current structure check karen
-      print('📊 CURRENT STRUCTURE BEFORE TEST:');
-      await debugCompleteStructure();
-
-      // 2. Multiple owners create karen
-      final owners = [
-        {
-          "id": 8,
-          "name": "junaid",
-          "stores": ["junaid_tailor", "junaid_sweets", "junaid_traders"],
-        },
-        {
-          "id": 9,
-          "name": "hammad",
-          "stores": ["hammad_electronics", "hammad_mobiles"],
-        },
-        {
-          "id": 10,
-          "name": "hashim",
-          "stores": ["hashim_warehouse", "hashim_wholesale"],
-        },
-      ];
-
-      for (final owner in owners) {
-        final ownerId = owner["id"] as int;
-        final ownerName = owner["name"] as String;
-        final stores = owner["stores"] as List<String>;
-
-        print('\n👤 Processing Owner: $ownerName');
-
-        // Master DB create karen
-        final masterDb = await openMasterDB(ownerId, ownerName);
-
-        // Each store create karen
-        for (int i = 0; i < stores.length; i++) {
-          final storeName = stores[i];
-          final storeDb = await openStoreDB(
-            ownerId,
-            ownerName,
-            i + 1,
-            storeName,
-          );
-          await storeDb.close();
-
-          // Master DB mein store record add karen
-          await masterDb.insert('stores', {
-            'id': DateTime.now().millisecondsSinceEpoch + i, // Unique ID
-            'ownerId': ownerId,
-            'storeName': storeName,
-            'folderPath':
-                'Pos_Desktop/pos_data/$ownerName/${ownerName}_${storeName.toLowerCase().replaceAll(' ', '_')}',
-            'dbPath':
-                'Pos_Desktop/pos_data/$ownerName/${ownerName}_${storeName.toLowerCase().replaceAll(' ', '_')}/store.db',
-            'createdAt': DateTime.now().toIso8601String(),
-            'updatedAt': DateTime.now().toIso8601String(),
-          });
-
-          print('   ✅ Store created: $storeName');
-        }
-
-        await masterDb.close();
-        print('   🎉 $ownerName - All stores created successfully!');
-      }
-
-      // 3. Final structure check karen
-      print('\n📊 FINAL STRUCTURE AFTER CREATING MULTIPLE OWNERS & STORES:');
-      await debugCompleteStructure();
-
-      print('\n🎉 MULTIPLE OWNERS & STORES CREATED SUCCESSFULLY!');
-    } catch (e) {
-      print('❌ Error creating multiple owners & stores: $e');
-    }
-  }
-
-  Future<void> debugCompleteStructure() async {
-    try {
-      final documentsDir = await getApplicationDocumentsDirectory();
-      final posDesktopFolder = Directory(
-        join(documentsDir.path, 'Pos_Desktop'),
-      );
-
-      print('=== COMPLETE DATABASE STRUCTURE ===');
-      print('Documents Path: $documentsDir');
-
-      if (await posDesktopFolder.exists()) {
-        print('📁 Pos_Desktop Folder: EXISTS');
-
-        // ✅ SHOW MAIN SYSTEM DB
-        final systemDbFile = File(join(posDesktopFolder.path, 'pos_system.db'));
-        if (await systemDbFile.exists()) {
-          print('  📄 pos_system.db (Main System DB)');
-        }
-
-        // ✅ CHECK pos_data FOLDER
-        final posDataFolder = Directory(
-          join(posDesktopFolder.path, 'pos_data'),
-        );
-        if (await posDataFolder.exists()) {
-          print('  📁 pos_data Folder: EXISTS');
-          final ownerFolders = posDataFolder.listSync();
-
-          int totalOwners = 0;
-          int totalStores = 0;
-
-          for (var ownerFolder in ownerFolders) {
-            if (ownerFolder is Directory) {
-              totalOwners++;
-              final ownerName = ownerFolder.path
-                  .split(Platform.pathSeparator)
-                  .last;
-              print('    👤 Owner: $ownerName');
-
-              final ownerEntities = ownerFolder.listSync();
-              int ownerStoreCount = 0;
-
-              for (var entity in ownerEntities) {
-                if (entity is File) {
-                  print(
-                    '      📄 ${entity.path.split(Platform.pathSeparator).last}',
-                  );
-                } else if (entity is Directory) {
-                  ownerStoreCount++;
-                  totalStores++;
-                  final storeName = entity.path
-                      .split(Platform.pathSeparator)
-                      .last;
-                  print('      🏪 Store: $storeName');
-
-                  final storeFiles = entity.listSync();
-                  for (var storeFile in storeFiles) {
-                    if (storeFile is File) {
-                      print(
-                        '        📄 ${storeFile.path.split(Platform.pathSeparator).last}',
-                      );
-                    }
-                  }
-                }
-              }
-              print('      📊 Stores Count: $ownerStoreCount');
-            }
-          }
-
-          print('\n📈 SUMMARY:');
-          print('   Total Owners: $totalOwners');
-          print('   Total Stores: $totalStores');
-        } else {
-          print('  ❌ pos_data Folder: NOT FOUND');
-        }
-      } else {
-        print('❌ Pos_Desktop Folder: NOT FOUND');
-      }
-      print('==================================');
-    } catch (e) {
-      print('❌ Error debugging structure: $e');
-    }
-  }
-
-  // 🔹 EMERGENCY RESET METHOD
   Future<void> forceResetDatabase() async {
     await _lock.synchronized(() async {
       if (_database != null) {
@@ -676,14 +465,12 @@ class DatabaseHelper {
       final posDesktopFolder = Directory(join(appDataDir.path, 'Pos_Desktop'));
       final String path = join(posDesktopFolder.path, 'pos_system.db');
 
-      // Delete the database file
       final file = File(path);
       if (await file.exists()) {
         await file.delete();
         _logger.i('🗑️ Database file deleted to reset locks');
       }
 
-      // Reinitialize
       _database = await _initDatabase();
     });
   }

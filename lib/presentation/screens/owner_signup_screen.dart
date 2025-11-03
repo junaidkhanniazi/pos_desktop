@@ -17,7 +17,7 @@ class OwnerSignupScreen extends StatefulWidget {
 
 class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
   late final OwnerSignupController controller;
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void initState() {
@@ -132,8 +132,9 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
                         label: 'Create My Store',
                         width: double.infinity,
                         onPressed: () async {
-                          if (!controller.formKey.currentState!.validate())
+                          if (!controller.formKey.currentState!.validate()) {
                             return;
+                          }
 
                           // Navigate to subscription screen with form data
                           Navigator.pushNamed(

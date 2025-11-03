@@ -359,7 +359,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
                               "history": <Map<String, dynamic>>[],
                             });
                           } else {
-                            inventory[selectedCategory]![selectedBrand]![editIndex!] =
+                            inventory[selectedCategory]![selectedBrand]![editIndex] =
                                 {
                                   "name": name,
                                   "price": price,

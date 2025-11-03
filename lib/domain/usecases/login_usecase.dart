@@ -33,7 +33,7 @@ class LoginUseCase {
 
       // 🧩 If staff, capture their role dynamically
       if (role == AuthRole.staff) {
-        final user = await _userDao.loginUser(email, password) as UserModel?;
+        final user = await _userDao.loginUser(email, password);
         await AuthStorageHelper.saveLogin(
           role: AuthRole.staff,
           email: email,

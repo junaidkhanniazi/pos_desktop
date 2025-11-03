@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/core/errors/exception_handler.dart'; // ✅ ADDED
-import 'package:pos_desktop/core/errors/failure.dart'; // ✅ ADDED
+// ✅ ADDED
 
 class SuperAdminDao {
   final _dbHelper = DatabaseHelper();

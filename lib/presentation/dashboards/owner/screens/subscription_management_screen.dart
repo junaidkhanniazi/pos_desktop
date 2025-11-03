@@ -46,14 +46,14 @@ class _SubscriptionManagementScreenState
   }
 
   void _showAddPlanDialog() {
-    final _formKey = GlobalKey<FormState>();
-    final _nameController = TextEditingController();
-    final _priceController = TextEditingController();
-    final _durationController = TextEditingController(text: '30');
-    final _maxStoresController = TextEditingController(text: '1');
-    final _maxProductsController = TextEditingController(text: '100');
-    final _maxCategoriesController = TextEditingController(text: '10');
-    final _featuresController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final durationController = TextEditingController(text: '30');
+    final maxStoresController = TextEditingController(text: '1');
+    final maxProductsController = TextEditingController(text: '100');
+    final maxCategoriesController = TextEditingController(text: '10');
+    final featuresController = TextEditingController();
 
     showDialog(
       context: context,
@@ -63,12 +63,12 @@ class _SubscriptionManagementScreenState
         title: Text("Create New Plan", style: AppText.h2),
         content: SingleChildScrollView(
           child: Form(
-            key: _formKey,
+            key: formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppInput(
-                  controller: _nameController,
+                  controller: nameController,
                   hint: "Plan Name",
                   icon: Icons.business_center_rounded,
                   validator: (value) {
@@ -80,7 +80,7 @@ class _SubscriptionManagementScreenState
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _priceController,
+                  controller: priceController,
                   hint: "Price (\$)",
                   icon: Icons.attach_money_rounded,
                   type: InputType.number,
@@ -96,7 +96,7 @@ class _SubscriptionManagementScreenState
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _durationController,
+                  controller: durationController,
                   hint: "Duration (days)",
                   icon: Icons.calendar_today_rounded,
                   type: InputType.number,
@@ -115,7 +115,7 @@ class _SubscriptionManagementScreenState
                   children: [
                     Expanded(
                       child: AppInput(
-                        controller: _maxStoresController,
+                        controller: maxStoresController,
                         hint: "Max Stores",
                         icon: Icons.store_rounded,
                         type: InputType.number,
@@ -124,7 +124,7 @@ class _SubscriptionManagementScreenState
                     const SizedBox(width: 12),
                     Expanded(
                       child: AppInput(
-                        controller: _maxProductsController,
+                        controller: maxProductsController,
                         hint: "Max Products",
                         icon: Icons.inventory_2_rounded,
                         type: InputType.number,
@@ -134,14 +134,14 @@ class _SubscriptionManagementScreenState
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _maxCategoriesController,
+                  controller: maxCategoriesController,
                   hint: "Max Categories",
                   icon: Icons.category_rounded,
                   type: InputType.number,
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _featuresController,
+                  controller: featuresController,
                   hint: "Features (comma separated)",
                   icon: Icons.featured_play_list_rounded,
                   maxLength: 200,
@@ -160,15 +160,15 @@ class _SubscriptionManagementScreenState
             label: "Create Plan",
             icon: Icons.add_rounded,
             onPressed: () {
-              if (_formKey.currentState!.validate()) {
+              if (formKey.currentState!.validate()) {
                 _createNewPlan(
-                  name: _nameController.text,
-                  price: double.parse(_priceController.text),
-                  durationDays: int.parse(_durationController.text),
-                  maxStores: int.parse(_maxStoresController.text),
-                  maxProducts: int.parse(_maxProductsController.text),
-                  maxCategories: int.parse(_maxCategoriesController.text),
-                  features: _featuresController.text,
+                  name: nameController.text,
+                  price: double.parse(priceController.text),
+                  durationDays: int.parse(durationController.text),
+                  maxStores: int.parse(maxStoresController.text),
+                  maxProducts: int.parse(maxProductsController.text),
+                  maxCategories: int.parse(maxCategoriesController.text),
+                  features: featuresController.text,
                 );
                 Navigator.pop(ctx);
               }
@@ -217,22 +217,22 @@ class _SubscriptionManagementScreenState
   }
 
   void _showEditPlanDialog(SubscriptionPlanEntity plan) {
-    final _formKey = GlobalKey<FormState>();
-    final _nameController = TextEditingController(text: plan.name);
-    final _priceController = TextEditingController(text: plan.price.toString());
-    final _durationController = TextEditingController(
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: plan.name);
+    final priceController = TextEditingController(text: plan.price.toString());
+    final durationController = TextEditingController(
       text: plan.durationDays.toString(),
     );
-    final _maxStoresController = TextEditingController(
+    final maxStoresController = TextEditingController(
       text: plan.maxStores.toString(),
     );
-    final _maxProductsController = TextEditingController(
+    final maxProductsController = TextEditingController(
       text: plan.maxProducts.toString(),
     );
-    final _maxCategoriesController = TextEditingController(
+    final maxCategoriesController = TextEditingController(
       text: plan.maxCategories.toString(),
     );
-    final _featuresController = TextEditingController(
+    final featuresController = TextEditingController(
       text: plan.features.join(', '),
     );
 
@@ -244,12 +244,12 @@ class _SubscriptionManagementScreenState
         title: Text("Edit Plan", style: AppText.h2),
         content: SingleChildScrollView(
           child: Form(
-            key: _formKey,
+            key: formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppInput(
-                  controller: _nameController,
+                  controller: nameController,
                   hint: "Plan Name",
                   icon: Icons.business_center_rounded,
                   validator: (value) {
@@ -262,7 +262,7 @@ class _SubscriptionManagementScreenState
                 const SizedBox(height: 16),
                 // ... same fields as add dialog
                 AppInput(
-                  controller: _priceController,
+                  controller: priceController,
                   hint: "Price (\$)",
                   icon: Icons.attach_money_rounded,
                   type: InputType.number,
@@ -278,7 +278,7 @@ class _SubscriptionManagementScreenState
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _durationController,
+                  controller: durationController,
                   hint: "Duration (days)",
                   icon: Icons.calendar_today_rounded,
                   type: InputType.number,
@@ -297,7 +297,7 @@ class _SubscriptionManagementScreenState
                   children: [
                     Expanded(
                       child: AppInput(
-                        controller: _maxStoresController,
+                        controller: maxStoresController,
                         hint: "Max Stores",
                         icon: Icons.store_rounded,
                         type: InputType.number,
@@ -306,7 +306,7 @@ class _SubscriptionManagementScreenState
                     const SizedBox(width: 12),
                     Expanded(
                       child: AppInput(
-                        controller: _maxProductsController,
+                        controller: maxProductsController,
                         hint: "Max Products",
                         icon: Icons.inventory_2_rounded,
                         type: InputType.number,
@@ -316,14 +316,14 @@ class _SubscriptionManagementScreenState
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _maxCategoriesController,
+                  controller: maxCategoriesController,
                   hint: "Max Categories",
                   icon: Icons.category_rounded,
                   type: InputType.number,
                 ),
                 const SizedBox(height: 16),
                 AppInput(
-                  controller: _featuresController,
+                  controller: featuresController,
                   hint: "Features (comma separated)",
                   icon: Icons.featured_play_list_rounded,
                   maxLength: 200,
@@ -342,16 +342,16 @@ class _SubscriptionManagementScreenState
             label: "Update",
             icon: Icons.save_rounded,
             onPressed: () {
-              if (_formKey.currentState!.validate()) {
+              if (formKey.currentState!.validate()) {
                 final updatedPlan = SubscriptionPlanEntity(
                   id: plan.id,
-                  name: _nameController.text,
-                  price: double.parse(_priceController.text),
-                  durationDays: int.parse(_durationController.text),
-                  features: _parseFeatures(_featuresController.text),
-                  maxStores: int.parse(_maxStoresController.text),
-                  maxProducts: int.parse(_maxProductsController.text),
-                  maxCategories: int.parse(_maxCategoriesController.text),
+                  name: nameController.text,
+                  price: double.parse(priceController.text),
+                  durationDays: int.parse(durationController.text),
+                  features: _parseFeatures(featuresController.text),
+                  maxStores: int.parse(maxStoresController.text),
+                  maxProducts: int.parse(maxProductsController.text),
+                  maxCategories: int.parse(maxCategoriesController.text),
                 );
                 _controller.editPlan(updatedPlan);
                 Navigator.pop(ctx);

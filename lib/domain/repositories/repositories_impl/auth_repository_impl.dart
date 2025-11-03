@@ -1,7 +1,6 @@
 import 'package:pos_desktop/data/local/dao/super_admin_dao.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
 import 'package:pos_desktop/data/local/dao/user_dao.dart';
-import 'package:pos_desktop/data/models/user_model.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/domain/repositories/auth_repository.dart';
 

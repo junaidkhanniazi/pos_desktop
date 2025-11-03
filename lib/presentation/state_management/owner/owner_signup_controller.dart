@@ -51,8 +51,9 @@ class OwnerSignupController {
   }
 
   String? validateContact(String? v) {
-    if (v == null || v.isEmpty)
+    if (v == null || v.isEmpty) {
       return 'Contact number is required'; // ✅ ADDED: Now required
+    }
     final regex = RegExp(r'^[0-9+\-\s()]{10,}$');
     if (!regex.hasMatch(v)) return 'Enter a valid contact number';
     return null;

@@ -88,7 +88,7 @@ class OwnerDao {
         }
 
         _logger.i(
-          '✅ Owner activated (id=$ownerId) - Subscription: $now to $endDate (${durationDays} days)',
+          '✅ Owner activated (id=$ownerId) - Subscription: $now to $endDate ($durationDays days)',
         );
 
         // ✅ NEW: AUTOMATICALLY CREATE MASTER DB & DEFAULT STORE
@@ -123,8 +123,8 @@ class OwnerDao {
 
   String _getOwnerName(OwnerModel owner) {
     // Pehle owner_name field check karen, agar nahi hai to email se derive karen
-    if (owner.ownerName != null && owner.ownerName!.isNotEmpty) {
-      return owner.ownerName!;
+    if (owner.ownerName.isNotEmpty) {
+      return owner.ownerName;
     }
 
     // Agar owner_name nahi hai to email se name derive karen
@@ -206,7 +206,7 @@ class OwnerDao {
           owner.subscriptionEndDate!,
         ).difference(DateTime.now()).inDays;
         _logger.w(
-          '⚠️ Subscription expiring soon for ${owner.email} - ${daysLeft} days left',
+          '⚠️ Subscription expiring soon for ${owner.email} - $daysLeft days left',
         );
       }
 
@@ -481,31 +481,32 @@ class OwnerDao {
   // 🔹 TEST METHODS
 
   // TEMPORARY: For testing expired subscription
-  Future<void> createTestExpiredOwner() async {
-    try {
-      final db = await _dbHelper.database;
-      final expiredOwner = {
-        'name': 'Test Expired Owner',
-        'email': 'expired@test.com',
-        'password': 'password',
-        'contact': '1234567890',
-        'status': 'approved',
-        'is_active': 1,
-        'activation_code': '999999',
-        'created_at': DateTime.now().toIso8601String(),
-        'subscription_plan_id': 1761893834219, // basic plan ID
-        'subscription_start_date': DateTime(2024, 10, 1).toIso8601String(),
-        'subscription_end_date': DateTime.now()
-            .subtract(Duration(days: 1))
-            .toIso8601String(),
-      };
 
-      await db.insert('owners', expiredOwner);
-      print('✅ Test expired owner created: expired@test.com');
-    } catch (e) {
-      print('❌ Error creating test expired owner: $e');
-    }
-  }
+  // Future<void> createTestExpiredOwner() async {
+  //   try {
+  //     final db = await _dbHelper.database;
+  //     final expiredOwner = {
+  //       'name': 'Test Expired Owner',
+  //       'email': 'expired@test.com',
+  //       'password': 'password',
+  //       'contact': '1234567890',
+  //       'status': 'approved',
+  //       'is_active': 1,
+  //       'activation_code': '999999',
+  //       'created_at': DateTime.now().toIso8601String(),
+  //       'subscription_plan_id': 1761893834219, // basic plan ID
+  //       'subscription_start_date': DateTime(2024, 10, 1).toIso8601String(),
+  //       'subscription_end_date': DateTime.now()
+  //           .subtract(Duration(days: 1))
+  //           .toIso8601String(),
+  //     };
+
+  //     await db.insert('owners', expiredOwner);
+  //     print('✅ Test expired owner created: expired@test.com');
+  //   } catch (e) {
+  //     print('❌ Error creating test expired owner: $e');
+  //   }
+  // }
 
   Future<void> expireOwnerNow(int ownerId) async {
     try {

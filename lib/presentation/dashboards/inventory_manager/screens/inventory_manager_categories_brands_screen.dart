@@ -55,11 +55,12 @@ class _InventoryManagerCategoriesBrandsScreenState
                     label: "Add",
                     icon: Icons.add,
                     onPressed: () {
-                      if (c.text.trim().isNotEmpty)
+                      if (c.text.trim().isNotEmpty) {
                         setState(() {
                           categories.add(c.text.trim());
                           brands[c.text.trim()] = [];
                         });
+                      }
                       Navigator.pop(context);
                     },
                   ),
@@ -105,10 +106,11 @@ class _InventoryManagerCategoriesBrandsScreenState
                     label: "Add",
                     icon: Icons.add,
                     onPressed: () {
-                      if (b.text.trim().isNotEmpty)
+                      if (b.text.trim().isNotEmpty) {
                         setState(() {
                           brands[selected]!.add(b.text.trim());
                         });
+                      }
                       Navigator.pop(context);
                     },
                   ),

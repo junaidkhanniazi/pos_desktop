@@ -4,9 +4,9 @@ class Failure {
 }
 
 class DatabaseFailure extends Failure {
-  DatabaseFailure(String message) : super(message);
+  DatabaseFailure(super.message);
 }
 
 class ValidationFailure extends Failure {
-  ValidationFailure(String message) : super(message);
+  ValidationFailure(super.message);
 }
