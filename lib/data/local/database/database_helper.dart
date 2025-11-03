@@ -138,6 +138,9 @@ class DatabaseHelper {
   // ======================================================
   // STORE DB (per Store)
   // ======================================================
+  // ======================================================
+  // STORE DB (per Store)
+  // ======================================================
   Future<Database> openStoreDB(
     int ownerId,
     String ownerName,
@@ -170,9 +173,21 @@ class DatabaseHelper {
       final db = await databaseFactory.openDatabase(
         dbPath,
         options: OpenDatabaseOptions(
-          version: 2, // ⬅️ bumped version for sync columns
+          version: 2,
           onCreate: (db, _) async => createStoreTables(db),
           onUpgrade: (db, oldV, newV) async => upgradeStoreDb(db, oldV, newV),
+
+          // ✅ This block verifies tables exist even if DB already exists
+          onOpen: (db) async {
+            try {
+              _logger.i('🧩 Verifying store DB schema...');
+              await createStoreTables(db);
+              _logger.i('✅ Store tables verified/created successfully');
+            } catch (e) {
+              _logger.e('❌ Failed verifying store tables: $e');
+            }
+          },
+
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
             await db.execute('PRAGMA busy_timeout = 10000');
@@ -181,6 +196,7 @@ class DatabaseHelper {
           },
         ),
       );
+
       return db;
     } catch (e) {
       _logger.e('❌ Failed to open Store DB for $storeName: $e');

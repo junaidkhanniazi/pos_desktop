@@ -5,17 +5,17 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class SyncService {
   final _logger = Logger();
-  // final String serverBaseUrl = "http://127.0.0.1:8080/api/sync";
   final String ownerName = "junaid";
   late final String serverBaseUrl = "http://127.0.0.1:8081/api/sync/$ownerName";
 
-  /// Push unsynced data to the Dart server
   Future<void> pushUnsyncedData(String storeDbPath) async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
     final db = await databaseFactoryFfi.openDatabase(storeDbPath);
     _logger.i('🚀 Starting push for → $storeDbPath');
+
+    // TEMP: Insert fake unsynced record for testing
 
     const baseUrl = 'http://127.0.0.1:8081/api/sync/junaid/upload';
 
@@ -56,21 +56,10 @@ class SyncService {
       }
     }
 
-    await db.close();
     _logger.i('🎉 Push sync complete!');
-    // TEMP: Insert fake unsynced record for testing
-    await db.insert('customers', {
-      'name': 'Test Customer',
-      'phone': '0300-9999999',
-      'email': 'test@mock.com',
-      'address': 'Some Street',
-      'created_at': DateTime.now().toIso8601String(),
-      'is_synced': 0,
-      'last_updated': DateTime.now().toIso8601String(),
-    });
+    await db.close();
   }
 
-  /// Pull updated data from server into local DB
   Future<void> pullFromServer(String storeDbPath) async {
     sqfliteFfiInit();
     final db = await databaseFactoryFfi.openDatabase(storeDbPath);

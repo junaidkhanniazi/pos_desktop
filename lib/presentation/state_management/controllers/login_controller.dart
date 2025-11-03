@@ -9,10 +9,11 @@ import 'package:pos_desktop/domain/usecases/login_usecase.dart';
 import 'package:pos_desktop/data/local/dao/super_admin_dao.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
 import 'package:pos_desktop/data/local/dao/user_dao.dart';
-import 'package:pos_desktop/presentation/widgets/app_input.dart';
-import 'package:pos_desktop/presentation/widgets/app_button.dart';
-import 'package:pos_desktop/core/theme/app_colors.dart';
-import 'package:pos_desktop/core/theme/app_text_styles.dart';
+
+// ✅ added for sync
+import 'package:pos_desktop/data/remote/sync/sync_service.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 
 class LoginController {
   final emailCtrl = TextEditingController();
@@ -71,20 +72,18 @@ class LoginController {
 
         case AuthRole.owner:
           try {
-            // First check if owner exists and subscription status
             final ownerDao = OwnerDao();
             final owner = await ownerDao.getOwnerByCredentials(email, password);
 
             if (owner != null) {
               if (owner.isSubscriptionExpired) {
-                // Subscription expired error message
                 AppToast.show(
                   context,
                   message:
                       'Your subscription has expired. Please renew to continue.',
                   type: ToastType.error,
                 );
-                return; // Prevent login
+                return;
               }
 
               if (owner.isSubscriptionExpiringSoon) {
@@ -108,7 +107,6 @@ class LoginController {
               _showActivationDialog(context, email, password);
             }
           } catch (e) {
-            // Check if the error is related to expired subscription
             if (e.toString().contains('subscription has expired')) {
               AppToast.show(
                 context,
@@ -117,7 +115,6 @@ class LoginController {
                 type: ToastType.error,
               );
             } else {
-              // Handle other errors
               AppToast.show(
                 context,
                 message: 'Owner login failed: ${e.toString()}',
@@ -166,8 +163,6 @@ class LoginController {
       }
     } catch (e) {
       if (!context.mounted) return;
-
-      // Only show error if it's not already handled (like expired subscription)
       if (!e.toString().contains('subscription has expired')) {
         AppToast.show(
           context,
@@ -192,33 +187,17 @@ class LoginController {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Activation Code Required", style: AppText.h2),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Please enter your activation code to login as Owner.",
-              style: AppText.body.copyWith(color: AppColors.textMedium),
-            ),
-            const SizedBox(height: 16),
-            AppInput(
-              controller: activationCtrl,
-              hint: "Enter Activation Code",
-              type: InputType.text,
-            ),
-          ],
+        title: const Text("Activation Code Required"),
+        content: TextField(
+          controller: activationCtrl,
+          decoration: const InputDecoration(hintText: "Enter Activation Code"),
         ),
         actions: [
-          AppButton(
-            label: "Cancel",
+          TextButton(
             onPressed: () => Navigator.pop(ctx),
-            isPrimary: false,
+            child: const Text("Cancel"),
           ),
-          AppButton(
-            label: "Verify & Login",
+          TextButton(
             onPressed: () async {
               await _verifyOwnerLogin(
                 ctx,
@@ -227,13 +206,14 @@ class LoginController {
                 activationCtrl.text.trim(),
               );
             },
+            child: const Text("Verify & Login"),
           ),
         ],
       ),
     );
   }
 
-  /// 🔸 Verify Owner Activation
+  /// 🔸 Verify Owner Activation + Auto Sync
   Future<void> _verifyOwnerLogin(
     BuildContext context,
     String email,
@@ -264,33 +244,39 @@ class LoginController {
             message: 'Your subscription has expired. Please renew to continue.',
             type: ToastType.error,
           );
-          return; // Stop activation if expired
+          return;
         }
 
         await AuthStorageHelper.saveLogin(role: AuthRole.owner, email: email);
-
         if (!context.mounted) return;
         Navigator.pop(context);
-
-        if (verified.isSubscriptionExpiringSoon) {
-          final daysLeft = DateTime.parse(
-            verified.subscriptionEndDate!,
-          ).difference(DateTime.now()).inDays;
-
-          AppToast.show(
-            context,
-            message:
-                'Your subscription expires in $daysLeft days. Please renew soon.',
-            type: ToastType.warning,
-          );
-        }
 
         AppToast.show(
           context,
           message: "Owner login successful!",
           type: ToastType.success,
         );
+
+        // ✅ Navigate first
         Navigator.pushReplacementNamed(context, AppRoutes.ownerDashboard);
+
+        // ✅ Trigger automatic sync after login success
+        try {
+          final syncService = SyncService();
+          final docs = await getApplicationDocumentsDirectory();
+
+          final storeDbPath = join(
+            docs.path,
+            'Pos_Desktop/pos_data/${verified.ownerName.toLowerCase()}/${verified.ownerName.toLowerCase()}_${verified.shopName.toLowerCase().replaceAll(' ', '_')}/store.db',
+          );
+
+          print("🔄 Starting auto sync for store DB: $storeDbPath");
+          await syncService.pushUnsyncedData(storeDbPath);
+          await syncService.pullFromServer(storeDbPath);
+          print("✅ Auto sync complete after login.");
+        } catch (e) {
+          print("❌ Auto sync failed: $e");
+        }
       } else {
         AppToast.show(
           context,
@@ -299,19 +285,11 @@ class LoginController {
         );
       }
     } catch (e) {
-      if (e.toString().contains('subscription has expired')) {
-        AppToast.show(
-          context,
-          message: 'Your subscription has expired. Please renew to continue.',
-          type: ToastType.error,
-        );
-      } else {
-        AppToast.show(
-          context,
-          message: "Login failed: $e",
-          type: ToastType.error,
-        );
-      }
+      AppToast.show(
+        context,
+        message: "Login failed: $e",
+        type: ToastType.error,
+      );
     }
   }
 
