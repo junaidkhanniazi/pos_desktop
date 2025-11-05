@@ -4,6 +4,7 @@ import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart'; // ✅ ADD THIS
 import 'package:pos_desktop/core/utils/toast_helper.dart'; // ✅ ADD THIS
+import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/domain/repositories/repositories_impl/auth_repository_impl.dart';
 import 'package:pos_desktop/domain/usecases/login_usecase.dart';
@@ -35,7 +36,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _init() async {
     await Future.delayed(const Duration(seconds: 1));
 
-    // ✅ FIRST CHECK IF SUBSCRIPTION EXPIRED AND AUTO LOGOUT
+    // ✅ STEP 1: Mark expired subscriptions as inactive before anything else
+    try {
+      final subDao = SubscriptionDao();
+      await subDao.markExpiredSubscriptions();
+      print('✅ Checked and marked expired subscriptions');
+    } catch (e) {
+      print('⚠️ Failed to mark expired subscriptions: $e');
+    }
+
+    // ✅ STEP 2: Check if the current logged-in owner's subscription expired
     final shouldRedirect =
         await AuthStorageHelper.checkAndHandleExpiredSubscription();
 
@@ -45,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // ✅ THEN CHECK SAVED LOGIN ROLE (NORMAL FLOW)
+    // ✅ STEP 3: Continue normal auto-login flow
     final role = await LoginUseCase.checkAutoLogin();
 
     if (!mounted) return;

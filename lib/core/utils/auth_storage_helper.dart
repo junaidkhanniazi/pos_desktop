@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:logger/logger.dart';
+import 'package:pos_desktop/data/models/store_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
@@ -15,6 +16,8 @@ class AuthStorageHelper {
   static const _keyStaffRole = 'staff_role';
   static const _keyAdminId = 'admin_id';
   static const _keyTempOwnerData = 'temp_owner_data';
+  static const _keyCurrentStoreId = 'current_store_id';
+  static const _keyCurrentStoreName = 'current_store_name';
 
   static final _logger = Logger();
 
@@ -170,5 +173,39 @@ class AuthStorageHelper {
       _logger.e('❌ Error during subscription check: $e');
       return false;
     }
+  }
+
+  static Future<void> setCurrentStore(StoreModel store) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyCurrentStoreId, store.id!);
+    await prefs.setString(_keyCurrentStoreName, store.storeName);
+  }
+
+  static Future<int?> getCurrentStoreId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyCurrentStoreId);
+  }
+
+  static Future<String?> getCurrentStoreName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyCurrentStoreName);
+  }
+
+  // Add this method to AuthStorageHelper for debugging
+  static Future<void> debugCurrentStore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storeId = prefs.getInt(_keyCurrentStoreId);
+    final storeName = prefs.getString(_keyCurrentStoreName);
+
+    _logger.i('🔍 CURRENT STORE DEBUG:');
+    _logger.i('   Store ID: $storeId');
+    _logger.i('   Store Name: $storeName');
+    _logger.i('   Is stored: ${storeId != null && storeName != null}');
+  }
+
+  static Future<void> clearCurrentStore() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyCurrentStoreId);
+    await prefs.remove(_keyCurrentStoreName);
   }
 }

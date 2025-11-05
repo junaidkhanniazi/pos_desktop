@@ -1,4 +1,3 @@
-// domain/repositories/repositories_impl/owner_repository_impl.dart
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
 import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
@@ -21,11 +20,11 @@ class OwnerRepositoryImpl implements OwnerRepository {
       shopName: owner.storeName,
       ownerName: owner.name,
       email: owner.email,
-      password: owner.password, // ✅ FIXED: Use actual password from entity
-      contact: owner.contact, // ✅ ADDED: Missing field
+      password: owner.password,
+      contact: owner.contact,
       superAdminId: owner.superAdminId != null
           ? int.tryParse(owner.superAdminId!)
-          : null, // ✅ ADDED: convert nullable String to int?
+          : null,
       status: owner.status.name,
       isActive: owner.status == OwnerStatus.active,
       createdAt: owner.createdAt.toIso8601String(),
@@ -40,7 +39,6 @@ class OwnerRepositoryImpl implements OwnerRepository {
     int durationDays,
     BuildContext context,
   ) async {
-    // 1️⃣ Activate the owner
     await _ownerDao.activateOwner(
       int.parse(ownerId),
       int.parse(superAdminId),
@@ -48,7 +46,6 @@ class OwnerRepositoryImpl implements OwnerRepository {
       context,
     );
 
-    // 2️⃣ Also mark the owner’s subscription as ACTIVE
     try {
       final db = await DatabaseHelper().database;
       await db.update(
@@ -65,50 +62,41 @@ class OwnerRepositoryImpl implements OwnerRepository {
 
   @override
   Future<void> rejectOwner(String ownerId) async {
-    try {
-      await _ownerDao.rejectOwner(int.parse(ownerId));
-    } catch (e) {
-      throw Exception("Error rejecting owner: $e");
-    }
+    await _ownerDao.rejectOwner(int.parse(ownerId));
   }
 
   @override
   Future<void> deleteOwner(String ownerId) async {
-    try {
-      await _ownerDao.deleteOwner(int.parse(ownerId));
-    } catch (e) {
-      throw Exception("Error deleting owner: $e");
-    }
+    await _ownerDao.deleteOwner(int.parse(ownerId));
   }
 
   @override
   Future<List<OwnerEntity>> getAllOwners() async {
-    try {
-      final models = await _ownerDao.getAllOwners();
-      return models.map((m) => m.toEntity()).toList();
-    } catch (e) {
-      throw Exception("Error fetching all owners: $e");
-    }
+    final models = await _ownerDao.getAllOwners();
+    return models.map((m) => m.toEntity()).toList();
   }
 
+  // ✅ OLD METHOD (kept for reuse elsewhere)
   @override
   Future<List<OwnerEntity>> getPendingOwners() async {
+    final models = await _ownerDao.getPendingOwners();
+    return models.map((m) => m.toEntity()).toList();
+  }
+
+  // ✅ NEW METHOD — use this for admin (includes plan + receipt)
+  Future<List<Map<String, dynamic>>> getPendingOwnersWithSubscriptions() async {
     try {
-      final models = await _ownerDao.getPendingOwners();
-      return models.map((m) => m.toEntity()).toList();
+      final result = await _ownerDao.getPendingOwnersWithSubscriptions();
+      return result;
     } catch (e) {
-      throw Exception("Error fetching pending owners: $e");
+      throw Exception("Error fetching pending owners with subscriptions: $e");
     }
   }
 
   @override
   Future<List<OwnerEntity>> getApprovedOwners() async {
-    try {
-      final models = await _ownerDao.getApprovedOwners();
-      return models.map((m) => m.toEntity()).toList();
-    } catch (e) {
-      throw Exception("Error fetching approved owners: $e");
-    }
+    final models = await _ownerDao.getApprovedOwners();
+    return models.map((m) => m.toEntity()).toList();
   }
 
   @override
@@ -117,21 +105,13 @@ class OwnerRepositoryImpl implements OwnerRepository {
     String password, {
     String? activationCode,
   }) async {
-    try {
-      final model = await _ownerDao.getOwnerByCredentials(email, password);
-      return model?.toEntity();
-    } catch (e) {
-      throw Exception("Error fetching owner by credentials: $e");
-    }
+    final model = await _ownerDao.getOwnerByCredentials(email, password);
+    return model?.toEntity();
   }
 
   @override
   Future<List<Map<String, dynamic>>> getSubscriptionPlans() async {
-    try {
-      return await _ownerDao.getSubscriptionPlans();
-    } catch (e) {
-      throw Exception("Error fetching subscription plans: $e");
-    }
+    return await _ownerDao.getSubscriptionPlans();
   }
 
   @override
@@ -141,70 +121,46 @@ class OwnerRepositoryImpl implements OwnerRepository {
     required String receiptImage,
     required double subscriptionAmount,
   }) async {
-    try {
-      final plans = await _ownerDao.getSubscriptionPlans();
-      final plan = plans.firstWhere(
-        (p) => p['name'] == subscriptionPlan,
-        orElse: () => {'duration_days': 30},
-      );
-      final durationDays = plan['duration_days'] ?? 30;
-      await _ownerDao.updateOwnerSubscription(
-        ownerId: int.parse(ownerId),
-        subscriptionPlan: subscriptionPlan,
-        receiptImage: receiptImage,
-        subscriptionAmount: subscriptionAmount,
-        durationDays: durationDays,
-      );
-    } catch (e) {
-      throw Exception("Error updating owner subscription: $e");
-    }
+    final plans = await _ownerDao.getSubscriptionPlans();
+    final plan = plans.firstWhere(
+      (p) => p['name'] == subscriptionPlan,
+      orElse: () => {'duration_days': 30},
+    );
+    final durationDays = plan['duration_days'] ?? 30;
+    await _ownerDao.updateOwnerSubscription(
+      ownerId: int.parse(ownerId),
+      subscriptionPlan: subscriptionPlan,
+      receiptImage: receiptImage,
+      subscriptionAmount: subscriptionAmount,
+      durationDays: durationDays,
+    );
   }
 
   @override
   Future<List<OwnerEntity>> getOwnersWithReceipt() async {
-    try {
-      final models = await _ownerDao.getOwnersWithReceipt();
-      return models.map((m) => m.toEntity()).toList();
-    } catch (e) {
-      throw Exception("Error fetching owners with receipt: $e");
-    }
+    final models = await _ownerDao.getOwnersWithReceipt();
+    return models.map((m) => m.toEntity()).toList();
   }
 
   @override
   Future<List<OwnerEntity>> getExpiringSubscriptions() async {
-    try {
-      final models = await _ownerDao.getOwnersWithExpiringSubscriptions();
-      return models.map((m) => m.toEntity()).toList();
-    } catch (e) {
-      throw Exception("Error fetching expiring subscriptions: $e");
-    }
+    final models = await _ownerDao.getOwnersWithExpiringSubscriptions();
+    return models.map((m) => m.toEntity()).toList();
   }
 
   @override
   Future<List<OwnerEntity>> getExpiredSubscriptions() async {
-    try {
-      final models = await _ownerDao.getOwnersWithExpiredSubscriptions();
-      return models.map((m) => m.toEntity()).toList();
-    } catch (e) {
-      throw Exception("Error fetching expired subscriptions: $e");
-    }
+    final models = await _ownerDao.getOwnersWithExpiredSubscriptions();
+    return models.map((m) => m.toEntity()).toList();
   }
 
   @override
   Future<SubscriptionEntity?> getOwnerSubscription(String ownerId) async {
-    try {
-      // ✅ Access SubscriptionDao directly
-      final subscriptionDao = SubscriptionDao();
-
-      // ✅ Get the active subscription for this owner
-      final model = await subscriptionDao.getActiveSubscription(
-        int.parse(ownerId),
-      );
-
-      // ✅ Return as entity
-      return model?.toEntity();
-    } catch (e) {
-      throw Exception("Error fetching owner subscription: $e");
-    }
+    // 🟢 Use latest subscription (any status)
+    final subscriptionDao = SubscriptionDao();
+    final model = await subscriptionDao.getSubscriptionByOwnerId(
+      int.parse(ownerId),
+    );
+    return model?.toEntity();
   }
 }

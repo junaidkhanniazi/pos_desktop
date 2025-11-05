@@ -5,16 +5,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pos_desktop/core/theme/app_theme.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart' show OwnerDao;
+import 'package:pos_desktop/data/local/dao/store_dao.dart';
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/local/dao/super_admin_dao.dart';
 import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
 import 'package:pos_desktop/data/remote/sync/sync_service.dart';
+import 'package:pos_desktop/injection.dart';
 import 'package:pos_desktop/presentation/screens/splash_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupDependencies();
 
   final dbHelper = DatabaseHelper();
   final database = await dbHelper.database; // ✅ Initialize system DB

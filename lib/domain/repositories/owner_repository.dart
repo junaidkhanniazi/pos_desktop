@@ -6,6 +6,7 @@ abstract class OwnerRepository {
   Future<List<OwnerEntity>> getAllOwners();
   Future<List<OwnerEntity>> getPendingOwners();
   Future<List<OwnerEntity>> getApprovedOwners();
+
   Future<void> addOwner(OwnerEntity owner);
   Future<void> activateOwner(
     String ownerId,
@@ -15,11 +16,13 @@ abstract class OwnerRepository {
   );
   Future<void> rejectOwner(String ownerId);
   Future<void> deleteOwner(String ownerId);
+
   Future<OwnerEntity?> getOwnerByCredentials(
     String email,
     String password, {
     String? activationCode,
   });
+
   Future<SubscriptionEntity?> getOwnerSubscription(String ownerId);
 
   // Subscription-related
@@ -33,4 +36,7 @@ abstract class OwnerRepository {
   Future<List<OwnerEntity>> getOwnersWithReceipt();
   Future<List<OwnerEntity>> getExpiringSubscriptions();
   Future<List<OwnerEntity>> getExpiredSubscriptions();
+
+  // ✅ NEW: Pending owners including subscription info (for admin UI)
+  Future<List<Map<String, dynamic>>> getPendingOwnersWithSubscriptions();
 }

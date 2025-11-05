@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_input.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/category_controller.dart';
 
 class OwnerInventoryScreen extends StatefulWidget {
   const OwnerInventoryScreen({super.key});
@@ -14,113 +16,84 @@ class OwnerInventoryScreen extends StatefulWidget {
 }
 
 class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
-  /// inventory[category][brand] = List<Product(Map)]
-  final Map<String, Map<String, List<Map<String, dynamic>>>> inventory = {
-    "Perfumes": {
-      "Dior": [
-        {
-          "name": "Sauvage EDT 100ml",
-          "stock": 12,
-          "price": 150.0,
-          "status": "In Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-        {
-          "name": "Miss Dior Blooming Bouquet",
-          "stock": 5,
-          "price": 130.0,
-          "status": "Low Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-      ],
-      "Chanel": [
-        {
-          "name": "Bleu de Chanel",
-          "stock": 9,
-          "price": 155.0,
-          "status": "Low Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-      ],
-    },
-    "Mobiles": {
-      "Apple": [
-        {
-          "name": "iPhone 15 Pro",
-          "stock": 20,
-          "price": 1200.0,
-          "status": "In Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-        {
-          "name": "Apple Watch Strap",
-          "stock": 18,
-          "price": 8.0,
-          "status": "In Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-      ],
-      "Samsung": [
-        {
-          "name": "Galaxy S24",
-          "stock": 10,
-          "price": 950.0,
-          "status": "In Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-        {
-          "name": "Samsung S24 Cover",
-          "stock": 8,
-          "price": 10.0,
-          "status": "Low Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-      ],
-    },
-    "Accessories": {
-      "Generic": [
-        {
-          "name": "AirPods Skin",
-          "stock": 0,
-          "price": 6.5,
-          "status": "Out of Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-        {
-          "name": "USB-C Cable (1m)",
-          "stock": 25,
-          "price": 5.0,
-          "status": "In Stock",
-          "history": <Map<String, dynamic>>[],
-        },
-      ],
-    },
-  };
+  final CategoryController _categoryController = Get.find<CategoryController>();
 
+  final List<String> _brands = ["All Brands"];
   int selectedCategoryIndex = 0;
-  String? selectedBrand; // set on init / category change
+  String? selectedBrand;
 
-  List<String> get categories => inventory.keys.toList(growable: false);
-  String get selectedCategory => categories[selectedCategoryIndex];
-
-  List<String> get brands =>
-      inventory[selectedCategory]!.keys.toList(growable: false);
-
-  List<Map<String, dynamic>> get productsForSelection =>
-      inventory[selectedCategory]![selectedBrand]!.cast<Map<String, dynamic>>();
+  // Dummy products data
+  final Map<String, List<Map<String, dynamic>>> _dummyProducts = {
+    "All Brands": [
+      {
+        "name": "Sample Product 1",
+        "stock": 12,
+        "price": 150.0,
+        "status": "In Stock",
+        "history": <Map<String, dynamic>>[],
+      },
+      {
+        "name": "Sample Product 2",
+        "stock": 5,
+        "price": 130.0,
+        "status": "Low Stock",
+        "history": <Map<String, dynamic>>[],
+      },
+      {
+        "name": "Sample Product 3",
+        "stock": 0,
+        "price": 200.0,
+        "status": "Out of Stock",
+        "history": <Map<String, dynamic>>[],
+      },
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
-    selectedBrand = inventory[selectedCategory]!.keys.first;
+    selectedBrand = _brands.first;
+    _loadCategories();
   }
 
+  Future<void> _loadCategories() async {
+    await _categoryController.loadCategories();
+  }
+
+  // 🔹 ADDED - Listen to controller changes
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Auto-refresh when controller data changes
+    _categoryController.addListener(_onControllerUpdate);
+  }
+
+  @override
+  void dispose() {
+    _categoryController.removeListener(_onControllerUpdate);
+    super.dispose();
+  }
+
+  void _onControllerUpdate() {
+    if (mounted) {
+      setState(() {
+        // Force UI update when controller data changes
+      });
+    }
+  }
+
+  // Using controller data
+  List<String> get categories => _categoryController.categoryNames;
+
+  String get selectedCategory =>
+      _categoryController.getCategoryName(selectedCategoryIndex);
+
+  List<Map<String, dynamic>> get productsForSelection =>
+      _dummyProducts[selectedBrand] ?? [];
+
   void _onCategoryTap(int index) {
-    setState(() {
-      selectedCategoryIndex = index;
-      // reset brand for this category
-      selectedBrand = inventory[selectedCategory]!.keys.first;
-    });
+    if (index >= categories.length) return;
+    setState(() => selectedCategoryIndex = index);
   }
 
   void _onBrandChanged(String? value) {
@@ -129,7 +102,6 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
   }
 
   // ---------- Inventory Actions ----------
-
   void updateStock(int index, int change) {
     setState(() {
       final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
@@ -160,7 +132,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text("Delete Product", style: AppText.h2),
         content: Text(
-          "Are you sure you want to delete '${productsForSelection[index]['name']}' from $selectedBrand?",
+          "Are you sure you want to delete '${productsForSelection[index]['name']}'?",
           style: AppText.body.copyWith(color: AppColors.textMedium),
         ),
         actions: [
@@ -173,7 +145,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
             icon: Icons.delete_outline,
             onPressed: () {
               setState(() {
-                inventory[selectedCategory]![selectedBrand]!.removeAt(index);
+                _dummyProducts[selectedBrand]!.removeAt(index);
               });
               Navigator.pop(context);
             },
@@ -211,7 +183,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
                       )
                     : SingleChildScrollView(
                         child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
+                          headingRowColor: MaterialStateProperty.all(
                             AppColors.background,
                           ),
                           headingTextStyle: AppText.body.copyWith(
@@ -296,7 +268,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
                   style: AppText.h2.copyWith(color: AppColors.textDark),
                 ),
                 const SizedBox(height: 18),
-                // Category + Brand (locked to current selection for clarity)
+                // Category + Brand info
                 Row(
                   children: [
                     Expanded(child: _pillInfo("Category", selectedCategory)),
@@ -351,7 +323,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
 
                         setState(() {
                           if (isNew) {
-                            inventory[selectedCategory]![selectedBrand]!.add({
+                            _dummyProducts[selectedBrand]!.add({
                               "name": name,
                               "price": price,
                               "stock": stock,
@@ -359,14 +331,13 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
                               "history": <Map<String, dynamic>>[],
                             });
                           } else {
-                            inventory[selectedCategory]![selectedBrand]![editIndex] =
-                                {
-                                  "name": name,
-                                  "price": price,
-                                  "stock": stock,
-                                  "status": status,
-                                  "history": product!['history'],
-                                };
+                            _dummyProducts[selectedBrand]![editIndex] = {
+                              "name": name,
+                              "price": price,
+                              "stock": stock,
+                              "status": status,
+                              "history": product!['history'],
+                            };
                           }
                         });
 
@@ -413,12 +384,11 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
   }
 
   // ---------- UI ----------
-
   @override
   Widget build(BuildContext context) {
     // guard in case brand disappeared
-    if (selectedBrand == null || !brands.contains(selectedBrand)) {
-      selectedBrand = brands.first;
+    if (selectedBrand == null || !_brands.contains(selectedBrand)) {
+      selectedBrand = _brands.first;
     }
 
     return Padding(
@@ -456,7 +426,7 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
                       child: DropdownButton<String>(
                         value: selectedBrand,
                         onChanged: _onBrandChanged,
-                        items: brands
+                        items: _brands
                             .map(
                               (b) => DropdownMenuItem(
                                 value: b,
@@ -485,60 +455,96 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
 
           const SizedBox(height: 16),
 
-          // CATEGORY TABS (pills)
-          SizedBox(
-            height: 46,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemBuilder: (_, i) {
-                final isSelected = i == selectedCategoryIndex;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => _onCategoryTap(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 10,
-                    ),
+          // CATEGORY TABS (pills) - NOW USING CONTROLLER DATA
+          Obx(
+            () => _categoryController.isLoading.value
+                ? Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : _categoryController.categories.isEmpty
+                ? Container(
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.border,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: AppColors.shadow.withOpacity(0.12),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ]
-                          : [],
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    child: Text(
-                      categories[i],
-                      style: isSelected
-                          ? AppText.button
-                          : AppText.body.copyWith(
-                              color: AppColors.textDark,
-                              fontWeight: FontWeight.w600,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.category_outlined,
+                          color: AppColors.textLight,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "No categories found. Add categories first.",
+                          style: AppText.body.copyWith(
+                            color: AppColors.textMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : SizedBox(
+                    height: 46,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemBuilder: (_, i) {
+                        final isSelected = i == selectedCategoryIndex;
+                        final category = _categoryController.categories[i];
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: () => _onCategoryTap(i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
                             ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.border,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.shadow.withOpacity(
+                                          0.12,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: Text(
+                              category.name,
+                              style: isSelected
+                                  ? AppText.button
+                                  : AppText.body.copyWith(
+                                      color: AppColors.textDark,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                            ),
+                          ),
+                        );
+                      },
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemCount: categories.length,
                     ),
                   ),
-                );
-              },
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemCount: categories.length,
-            ),
           ),
 
           const SizedBox(height: 18),
 
-          // TABLE
+          // TABLE - KEEPING DUMMY PRODUCTS
           Expanded(
             child: Container(
               width: double.infinity,
@@ -555,14 +561,15 @@ class _OwnerInventoryScreenState extends State<OwnerInventoryScreen> {
               ),
               child: SingleChildScrollView(
                 child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(
+                  headingRowColor: MaterialStateProperty.all(
                     AppColors.background,
                   ),
                   headingTextStyle: AppText.body.copyWith(
                     fontWeight: FontWeight.bold,
                     color: AppColors.textDark,
                   ),
-                  dataRowHeight: 58,
+                  dataRowMinHeight: 58,
+                  dataRowMaxHeight: 58,
                   columns: const [
                     DataColumn(label: Text("Product Name")),
                     DataColumn(label: Text("Stock")),

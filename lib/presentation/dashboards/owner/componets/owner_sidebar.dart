@@ -7,7 +7,7 @@ import 'package:pos_desktop/presentation/state_management/controllers/logout_con
 class OwnerSidebar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
-  final _logoutController = LogoutController(); // ✅ use controller
+  final _logoutController = LogoutController();
 
   OwnerSidebar({
     super.key,
@@ -22,6 +22,10 @@ class OwnerSidebar extends StatelessWidget {
       {'icon': LucideIcons.box, 'label': 'Inventory'},
       {'icon': LucideIcons.users, 'label': 'Staff'},
       {'icon': LucideIcons.barChart3, 'label': 'Reports'},
+      {
+        'icon': LucideIcons.store,
+        'label': 'My Stores',
+      }, // 🏬 NEW TAB ADDED HERE
     ];
 
     return Container(
@@ -100,7 +104,7 @@ class OwnerSidebar extends StatelessWidget {
             ),
           ),
 
-          // 🔹 Logout Button (simple call to controller)
+          // 🔹 Logout Button
           InkWell(
             onTap: () => _logoutController.logout(context),
             borderRadius: BorderRadius.circular(12),

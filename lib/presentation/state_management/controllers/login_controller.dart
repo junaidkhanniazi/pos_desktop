@@ -121,7 +121,7 @@ class LoginController {
     }
   }
 
-  /// 🔹 SIMPLIFIED OWNER LOGIN (subscription validation only)
+  /// 🔹 OWNER LOGIN (Subscription Validation + Status Check)
   Future<void> _handleOwnerLogin(
     BuildContext context,
     String email,
@@ -142,7 +142,7 @@ class LoginController {
 
     final sub = await subDao.getActiveSubscription(owner.id!);
 
-    // 🔴 No active subscription found
+    // 🔴 No subscription found
     if (sub == null) {
       AppToast.show(
         context,
@@ -152,17 +152,18 @@ class LoginController {
       return;
     }
 
-    // 🔴 Expired subscription
-    if (sub.isExpired) {
+    // 🔴 Subscription inactive or expired
+    if (sub.status == 'inactive' || sub.isExpired) {
       AppToast.show(
         context,
-        message: 'Your subscription has expired. Please renew to continue.',
+        message:
+            'Your subscription has expired or is inactive. Please renew to continue.',
         type: ToastType.error,
       );
       return;
     }
 
-    // 🟡 Expiring soon (warning only - still allow login)
+    // 🟡 Expiring soon (show warning, still allow login)
     if (sub.isExpiringSoon) {
       final daysLeft = sub.subscriptionEndDate != null
           ? DateTime.parse(
@@ -179,7 +180,7 @@ class LoginController {
       );
     }
 
-    // ✅ Valid subscription - proceed with login
+    // ✅ Valid subscription — proceed with login
     await AuthStorageHelper.saveLogin(
       role: AuthRole.owner,
       email: email,

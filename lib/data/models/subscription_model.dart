@@ -71,7 +71,12 @@ class SubscriptionModel {
   // ------------------------------
   bool get isActive => status == 'active';
   bool get isInactive => status == 'inactive';
-  bool get isExpired => status == 'expired';
+  bool get isExpired {
+    if (subscriptionEndDate == null) return false;
+    final end = DateTime.tryParse(subscriptionEndDate!);
+    if (end == null) return false;
+    return end.isBefore(DateTime.now());
+  }
 
   bool get isExpiringSoon {
     if (subscriptionEndDate == null) return false;

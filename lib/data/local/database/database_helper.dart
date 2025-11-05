@@ -137,6 +137,7 @@ class DatabaseHelper {
   // ======================================================
   // STORE DB (per Store) - UPDATED FOLDER STRUCTURE
   // ======================================================
+
   Future<Database> openStoreDB(
     int ownerId,
     String ownerName,

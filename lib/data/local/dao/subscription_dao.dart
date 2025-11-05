@@ -8,7 +8,7 @@ class SubscriptionDao {
   final _logger = Logger();
 
   // ======================================================
-  // 🔹 Insert new subscription
+  // 🔹 Insert new subscription (ALWAYS insert, never overwrite)
   // ======================================================
   Future<int> insertSubscription(SubscriptionModel subscription) async {
     final db = await _dbHelper.database;
@@ -17,7 +17,7 @@ class SubscriptionDao {
         return await db.insert(
           'subscriptions',
           subscription.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          conflictAlgorithm: ConflictAlgorithm.ignore,
         );
       });
       _logger.i('✅ Subscription inserted for ownerId: ${subscription.ownerId}');
@@ -34,7 +34,10 @@ class SubscriptionDao {
   Future<List<SubscriptionModel>> getAllSubscriptions() async {
     final db = await _dbHelper.database;
     try {
-      final result = await db.query('subscriptions');
+      final result = await db.query(
+        'subscriptions',
+        orderBy: 'created_at DESC',
+      );
       return result.map((e) => SubscriptionModel.fromMap(e)).toList();
     } catch (e) {
       _logger.e('❌ Failed to fetch subscriptions: $e');
@@ -42,7 +45,9 @@ class SubscriptionDao {
     }
   }
 
-  // 🔹 Get subscription by owner ID (any status)
+  // ======================================================
+  // 🔹 Get latest subscription (any status)
+  // ======================================================
   Future<SubscriptionModel?> getSubscriptionByOwnerId(int ownerId) async {
     final db = await _dbHelper.database;
     try {
@@ -50,7 +55,7 @@ class SubscriptionDao {
         'subscriptions',
         where: 'owner_id = ?',
         whereArgs: [ownerId],
-        orderBy: 'created_at DESC',
+        orderBy: 'id DESC',
         limit: 1,
       );
       if (result.isNotEmpty) {
@@ -64,7 +69,7 @@ class SubscriptionDao {
   }
 
   // ======================================================
-  // 🔹 Get subscriptions by owner ID
+  // 🔹 Get all subscriptions for specific owner
   // ======================================================
   Future<List<SubscriptionModel>> getSubscriptionsByOwner(int ownerId) async {
     final db = await _dbHelper.database;
@@ -73,6 +78,7 @@ class SubscriptionDao {
         'subscriptions',
         where: 'owner_id = ?',
         whereArgs: [ownerId],
+        orderBy: 'id DESC',
       );
       return result.map((e) => SubscriptionModel.fromMap(e)).toList();
     } catch (e) {
@@ -82,51 +88,87 @@ class SubscriptionDao {
   }
 
   // ======================================================
-  // 🔹 Get active subscription for an owner
+  // 🔹 Get the latest *valid active* subscription
   // ======================================================
   Future<SubscriptionModel?> getActiveSubscription(int ownerId) async {
-    final db = await DatabaseHelper().database;
-
-    // ✅ Fetch latest subscription for that owner, regardless of status
-    final result = await db.query(
-      'subscriptions',
-      where: 'owner_id = ?',
-      whereArgs: [ownerId],
-      orderBy: 'id DESC',
-      limit: 1,
-    );
-
-    if (result.isNotEmpty) {
-      return SubscriptionModel.fromMap(result.first);
-    }
-    return null;
-  }
-
-  // In subscription_dao.dart - Add this test method
-  Future<void> testExpireSubscription(int ownerId) async {
     final db = await _dbHelper.database;
     try {
-      // Set subscription end date to yesterday (expired)
-      final yesterday = DateTime.now().subtract(Duration(days: 1));
-
-      await db.update(
+      final now = DateTime.now().toIso8601String();
+      final result = await db.query(
         'subscriptions',
-        {
-          'subscription_end_date': yesterday.toIso8601String(),
-          'status': 'active', // Keep status as active to test auto-logout
-        },
-        where: 'owner_id = ?',
-        whereArgs: [ownerId],
+        where: '''
+          owner_id = ? 
+          AND status = 'active' 
+          AND date(subscription_end_date) >= date(?)
+        ''',
+        whereArgs: [ownerId, now],
+        orderBy: 'subscription_end_date DESC',
+        limit: 1,
       );
 
-      _logger.i('✅ TEST: Made subscription expired for owner $ownerId');
+      if (result.isNotEmpty) {
+        return SubscriptionModel.fromMap(result.first);
+      }
+      return null;
     } catch (e) {
-      _logger.e('❌ TEST: Error expiring subscription: $e');
+      _logger.e('❌ Failed to get active subscription: $e');
+      return null;
     }
   }
 
   // ======================================================
-  // 🔹 Update subscription status
+  // 🔹 ✅ NEW: Get the latest subscription (ANY status)
+  //     Used by SubscriptionPlanDao to find owner plan limits.
+  // ======================================================
+  Future<SubscriptionModel?> getLatestSubscription(int ownerId) async {
+    final db = await _dbHelper.database;
+    try {
+      final result = await db.query(
+        'subscriptions',
+        where: 'owner_id = ?',
+        whereArgs: [ownerId],
+        orderBy: 'id DESC', // latest record by insert order
+        limit: 1,
+      );
+      if (result.isNotEmpty) {
+        final sub = SubscriptionModel.fromMap(result.first);
+        _logger.i(
+          '📦 Latest subscription for owner $ownerId → ${sub.subscriptionPlanName}',
+        );
+        return sub;
+      }
+      _logger.w('⚠️ No subscription found for owner $ownerId');
+      return null;
+    } catch (e) {
+      _logger.e('❌ getLatestSubscription error: $e');
+      return null;
+    }
+  }
+
+  // ======================================================
+  // 🔹 Mark expired subscriptions as inactive
+  // ======================================================
+  Future<void> markExpiredSubscriptions() async {
+    final db = await _dbHelper.database;
+    try {
+      final now = DateTime.now().toIso8601String();
+      final count = await db.rawUpdate(
+        '''
+        UPDATE subscriptions
+        SET status = 'inactive', updated_at = ?
+        WHERE date(subscription_end_date) < date(?)
+          AND status = 'active'
+      ''',
+        [now, now],
+      );
+      _logger.i('⌛ Marked $count subscriptions as inactive (expired)');
+    } catch (e) {
+      _logger.e('❌ Failed to mark expired subscriptions: $e');
+    }
+  }
+
+  // ======================================================
+  // 🔹 Update subscription status manually
   // ======================================================
   Future<int> updateSubscriptionStatus(int id, String status) async {
     final db = await _dbHelper.database;
@@ -146,24 +188,24 @@ class SubscriptionDao {
   }
 
   // ======================================================
-  // 🔹 Mark expired subscriptions
+  // 🔹 TEST: Force expire subscription
   // ======================================================
-  Future<void> markExpiredSubscriptions() async {
+  Future<void> testExpireSubscription(int ownerId) async {
     final db = await _dbHelper.database;
     try {
-      final now = DateTime.now().toIso8601String();
-      final count = await db.rawUpdate(
-        '''
-        UPDATE subscriptions
-        SET status = 'expired', updated_at = ?
-        WHERE date(subscription_end_date) < date(?)
-          AND status != 'expired'
-      ''',
-        [now, now],
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      await db.update(
+        'subscriptions',
+        {
+          'subscription_end_date': yesterday.toIso8601String(),
+          'status': 'active',
+        },
+        where: 'owner_id = ?',
+        whereArgs: [ownerId],
       );
-      _logger.i('⌛ Marked $count subscriptions as expired');
+      _logger.i('✅ TEST: Simulated expiry for owner $ownerId');
     } catch (e) {
-      _logger.e('❌ Failed to mark expired subscriptions: $e');
+      _logger.e('❌ TEST: Error expiring subscription: $e');
     }
   }
 
@@ -187,7 +229,7 @@ class SubscriptionDao {
   }
 
   // ======================================================
-  // 🔹 Clear all subscriptions (admin tool)
+  // 🔹 Admin utility: clear all
   // ======================================================
   Future<void> clearAllSubscriptions() async {
     final db = await _dbHelper.database;

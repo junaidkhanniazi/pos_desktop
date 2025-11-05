@@ -154,48 +154,42 @@ class OwnerRequestsController extends GetxController {
   Future<void> loadPendingOwners() async {
     try {
       isLoading.value = true;
-      final owners = await repo.getPendingOwners();
 
-      // ✅ Get subscription data for each owner separately
-      final ownersWithSubscriptions = await Future.wait(
-        owners.map((owner) async {
-          try {
-            // ✅ FIXED: Call getOwnerSubscription on repo, not on controller
-            final subscription = await repo.getOwnerSubscription(owner.id);
+      // ✅ Get pending owners WITH subscription data in a single query
+      final combinedData = await repo.getPendingOwnersWithSubscriptions();
 
-            if (subscription != null) {
-              // Return owner with subscription data (without modifying OwnerEntity)
-              return owner.copyWith(
-                subscriptionPlan: subscription.subscriptionPlanName,
-                subscriptionAmount: subscription.subscriptionAmount,
-                paymentDate: subscription.paymentDate,
-                receiptImage: subscription.receiptImage,
-                subscriptionStartDate: subscription.subscriptionStartDate,
-                subscriptionEndDate: subscription.subscriptionEndDate,
-              );
-            }
-          } catch (e) {
-            print('❌ Error fetching subscription for owner ${owner.id}: $e');
-          }
-          return owner; // Return original if no subscription found
-        }),
-      );
-
-      // Debug print
-      print(
-        '🔍 Loaded ${ownersWithSubscriptions.length} owners with subscriptions:',
-      );
-      for (final owner in ownersWithSubscriptions) {
-        print('   👤 ${owner.name} (${owner.email})');
-        print('      Store: ${owner.storeName}');
-        print(
-          '      Subscription Plan: ${owner.subscriptionPlan ?? "No Plan"}',
+      // Convert the Map data into OwnerEntity list
+      final ownersWithSubs = combinedData.map((data) {
+        return OwnerEntity(
+          id: data['id'].toString(),
+          name: data['owner_name']?.toString() ?? '',
+          email: data['email']?.toString() ?? '',
+          storeName: data['shop_name']?.toString() ?? '',
+          contact: data['contact']?.toString() ?? '',
+          password: '', // no need to load passwords
+          status: OwnerStatus.pending,
+          createdAt:
+              DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
+          subscriptionPlan: data['subscription_plan_name']?.toString(),
+          receiptImage: data['receipt_image']?.toString(),
+          subscriptionStartDate: data['subscription_start_date'] != null
+              ? DateTime.tryParse(data['subscription_start_date'])
+              : null,
+          subscriptionEndDate: data['subscription_end_date'] != null
+              ? DateTime.tryParse(data['subscription_end_date'])
+              : null,
         );
-        print('      Receipt: ${owner.receiptImage ?? "N/A"}');
-        print('   ---');
-      }
+      }).toList();
 
-      pendingOwners.value = ownersWithSubscriptions;
+      pendingOwners.value = ownersWithSubs;
+
+      // Debug log
+      print('✅ Loaded ${ownersWithSubs.length} pending owners (with plans):');
+      for (final o in ownersWithSubs) {
+        print('   👤 ${o.name} | Plan: ${o.subscriptionPlan ?? "N/A"}');
+      }
+    } catch (e) {
+      print('❌ Failed to load pending owners with subscriptions: $e');
     } finally {
       isLoading.value = false;
     }

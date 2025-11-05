@@ -1,22 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:pos_desktop/core/storage/auth_storage.dart';
+import 'package:get/get.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/core/utils/auth_storage_helper.dart'; // ✅ ADD THIS
-import 'package:pos_desktop/core/utils/toast_helper.dart'; // ✅ ADD THIS
-import 'package:pos_desktop/core/routes/app_routes.dart'; // ✅ ADD THIS
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
+import 'package:pos_desktop/core/utils/toast_helper.dart';
+import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
-import 'package:pos_desktop/data/remote/sync/sync_service.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_sidebar.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_topbar.dart';
+import 'package:pos_desktop/presentation/dashboards/owner/screens/owner_store_management_screen.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/category_controller.dart';
 import 'screens/owner_overview_screen.dart';
 import 'screens/owner_inventory_screen.dart';
 import 'screens/owner_reports_screen.dart';
 import 'screens/owner_staff_screen.dart';
-import 'package:path/path.dart' as p;
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -27,72 +26,39 @@ class OwnerDashboard extends StatefulWidget {
 
 class _OwnerDashboardState extends State<OwnerDashboard> {
   int selectedIndex = 0;
-  Timer? _subscriptionChecker; // ✅ ADD TIMER FOR PERIODIC CHECK
+  Timer? _subscriptionChecker;
   bool _isSyncing = false;
-  // Future<void> _manualSync() async {
-  //   setState(() => _isSyncing = true);
 
-  //   try {
-  //     final syncService = SyncService();
-  //     final docs = await getApplicationDocumentsDirectory();
+  // 🔥 REMOVED - GlobalKey not needed anymore
+  // final GlobalKey _inventoryKey = GlobalKey();
 
-  //     // ✅ Get owner email or name from storage
-  //     final email = await AuthStorage.getSavedEmail() ?? "owner";
-  //     final ownerName = email
-  //         .split('@')
-  //         .first
-  //         .toLowerCase(); // derive folder name
+  // 🔥 UPDATED - Method to refresh inventory
+  void _refreshInventory() {
+    // 🔹 DIRECTLY CALL CONTROLLER - NO SCREEN REFERENCE NEEDED
+    final categoryController = Get.find<CategoryController>();
+    categoryController.loadCategories(); // Direct call to controller
 
-  //     // ✅ Build store path dynamically (assuming default main_store)
-  //     final storeDbPath = p.join(
-  //       docs.path,
-  //       'Pos_Desktop/pos_data/$ownerName/${ownerName}_main_store/store.db',
-  //     );
-
-  //     print("🔄 Manual sync started for: $storeDbPath");
-
-  //     await syncService.pushUnsyncedData(storeDbPath);
-  //     await syncService.pullFromServer(storeDbPath);
-
-  //     if (mounted) {
-  //       AppToast.show(
-  //         context,
-  //         message: "✅ Sync completed successfully!",
-  //         type: ToastType.success,
-  //       );
-  //     }
-  //   } catch (e) {
-  //     if (mounted) {
-  //       AppToast.show(
-  //         context,
-  //         message: "❌ Sync failed: $e",
-  //         type: ToastType.error,
-  //       );
-  //     }
-  //   } finally {
-  //     if (mounted) setState(() => _isSyncing = false);
-  //   }
-  // }
-
-  final List<Widget> pages = const [
-    OwnerOverviewScreen(),
-    OwnerInventoryScreen(),
-    OwnerStaffScreen(),
-    OwnerReportsScreen(),
-  ];
+    print("🔄 Inventory refresh triggered from dashboard");
+  }
 
   @override
   void initState() {
     super.initState();
-    _startSubscriptionChecker(); // ✅ START CHECKING SUBSCRIPTION
-    _checkSubscriptionOnStart(); // ✅ CHECK ON DASHBOARD START
+    _startSubscriptionChecker();
+    _checkSubscriptionOnStart();
   }
 
   // ✅ START PERIODIC SUBSCRIPTION CHECK
   void _startSubscriptionChecker() {
     _subscriptionChecker = Timer.periodic(Duration(minutes: 5), (timer) async {
+      // ✅ Step 1: Mark expired subscriptions inactive
+      final subDao = SubscriptionDao();
+      await subDao.markExpiredSubscriptions();
+
+      // ✅ Step 2: Check current owner subscription
       final shouldLogout =
           await AuthStorageHelper.checkAndHandleExpiredSubscription();
+
       if (shouldLogout && mounted) {
         _showExpirationMessageAndLogout();
       }
@@ -142,8 +108,26 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
   @override
   void dispose() {
-    _subscriptionChecker?.cancel(); // ✅ CANCEL TIMER
+    _subscriptionChecker?.cancel();
     super.dispose();
+  }
+
+  // 🔥 UPDATED - Build current page WITHOUT GlobalKey
+  Widget _buildCurrentPage() {
+    switch (selectedIndex) {
+      case 0:
+        return const OwnerOverviewScreen();
+      case 1:
+        return const OwnerInventoryScreen(); // 🔹 REMOVE key parameter
+      case 2:
+        return const OwnerStaffScreen();
+      case 3:
+        return const OwnerReportsScreen();
+      case 4:
+        return const OwnerStoreManagementScreen();
+      default:
+        return const OwnerOverviewScreen();
+    }
   }
 
   @override
@@ -159,7 +143,8 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           Expanded(
             child: Column(
               children: [
-                const OwnerTopBar(),
+                // 🔥 UPDATED - Pass the callback to OwnerTopBar
+                OwnerTopBar(onStoreSwitched: _refreshInventory),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -168,7 +153,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                     child: Container(
                       key: ValueKey(selectedIndex),
                       color: AppColors.background,
-                      child: pages[selectedIndex],
+                      child: _buildCurrentPage(),
                     ),
                   ),
                 ),
@@ -187,55 +172,22 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           ),
         ],
       ),
-      // floatingActionButton: FloatingActionButton.extended(
-      //   backgroundColor: Colors.blueAccent,
-      //   icon: Icon(_isSyncing ? Icons.sync : Icons.cloud_sync),
-      //   label: Text(_isSyncing ? "Syncing..." : "Sync Now"),
-      //   onPressed: _isSyncing ? null : _manualSync,
-      // ),
-      // Add this to your owner_dashboard.dart in the scaffold
-      // If you want separate FABs for each scenario
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Expired FAB
-          FloatingActionButton(
-            onPressed: () => _testScenario(context, 'expired'),
-            child: Icon(Icons.timer_off),
-            backgroundColor: Colors.red,
-            mini: true,
-            tooltip: "Test Expired",
-          ),
-          SizedBox(height: 10),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final ownerId = await AuthStorageHelper.getOwnerId();
+          if (ownerId != null) {
+            final subDao = SubscriptionDao();
+            await subDao.testExpireSubscription(int.parse(ownerId));
+            AppToast.show(context, message: "Subscription expired for testing");
 
-          // Expiring Soon FAB
-          FloatingActionButton(
-            onPressed: () => _testScenario(context, 'expiring_soon'),
-            child: Icon(Icons.warning),
-            backgroundColor: Colors.orange,
-            mini: true,
-            tooltip: "Test Expiring Soon",
-          ),
-          SizedBox(height: 10),
-
-          // Valid FAB
-          FloatingActionButton(
-            onPressed: () => _testScenario(context, 'valid'),
-            child: Icon(Icons.check_circle),
-            backgroundColor: Colors.green,
-            mini: true,
-            tooltip: "Test Valid",
-          ),
-          SizedBox(height: 10),
-
-          // Main FAB
-          FloatingActionButton(
-            onPressed: () => _showTestMenu(context),
-            child: Icon(Icons.bug_report),
-            backgroundColor: Colors.purple,
-            tooltip: "All Test Scenarios",
-          ),
-        ],
+            // Optional: Auto logout to test the flow
+            await AuthStorageHelper.logout();
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        },
+        child: Icon(Icons.timer_off),
+        backgroundColor: Colors.orange,
+        tooltip: "Test Subscription Expiry",
       ),
     );
   }

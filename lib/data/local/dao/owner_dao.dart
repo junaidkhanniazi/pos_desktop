@@ -134,6 +134,74 @@ class OwnerDao {
     }
   }
 
+  // ✅ Get latest subscription for a given owner (any status)
+  Future<Map<String, dynamic>?> getLatestSubscriptionForOwner(
+    int ownerId,
+  ) async {
+    try {
+      final db = await _dbHelper.database;
+      final result = await db.query(
+        'subscriptions',
+        where: 'owner_id = ?',
+        whereArgs: [ownerId],
+        orderBy: 'id DESC',
+        limit: 1,
+      );
+      if (result.isNotEmpty) {
+        return result.first;
+      }
+      return null;
+    } catch (e) {
+      _logger.e('❌ getLatestSubscriptionForOwner error: $e');
+      return null;
+    }
+  }
+
+  // ✅ Get pending owners along with their latest subscription
+  Future<List<Map<String, dynamic>>> getPendingOwnersWithSubscriptions() async {
+    try {
+      final db = await _dbHelper.database;
+      final owners = await db.query(
+        'owners',
+        where: 'status = ?',
+        whereArgs: ['pending'],
+        orderBy: 'id DESC',
+      );
+
+      final List<Map<String, dynamic>> combined = [];
+
+      for (final owner in owners) {
+        final subResult = await db.query(
+          'subscriptions',
+          where: 'owner_id = ?',
+          whereArgs: [owner['id']],
+          orderBy: 'id DESC',
+          limit: 1,
+        );
+
+        final subscription = subResult.isNotEmpty
+            ? subResult.first
+            : <String, dynamic>{};
+
+        combined.add({
+          ...owner,
+          ...{
+            'subscription_plan_name': subscription['subscription_plan_name'],
+            'receipt_image': subscription['receipt_image'],
+            'subscription_status': subscription['status'],
+            'subscription_start_date': subscription['subscription_start_date'],
+            'subscription_end_date': subscription['subscription_end_date'],
+          },
+        });
+      }
+
+      return combined;
+    } catch (e) {
+      _logger.e('❌ getPendingOwnersWithSubscriptions error: $e');
+      return [];
+    }
+  }
+
   String _getOwnerName(OwnerModel owner) {
     // Pehle owner_name field check karen, agar nahi hai to email se derive karen
     if (owner.ownerName.isNotEmpty) {
