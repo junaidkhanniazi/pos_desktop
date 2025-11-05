@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:pos_desktop/domain/entities/owner_entity.dart';
+import 'package:pos_desktop/domain/entities/subscription_entity.dart';
 
 abstract class OwnerRepository {
   Future<List<OwnerEntity>> getAllOwners();
@@ -9,6 +11,7 @@ abstract class OwnerRepository {
     String ownerId,
     String superAdminId,
     int durationDays,
+    BuildContext context,
   );
   Future<void> rejectOwner(String ownerId);
   Future<void> deleteOwner(String ownerId);
@@ -17,6 +20,7 @@ abstract class OwnerRepository {
     String password, {
     String? activationCode,
   });
+  Future<SubscriptionEntity?> getOwnerSubscription(String ownerId);
 
   // Subscription-related
   Future<List<Map<String, dynamic>>> getSubscriptionPlans();

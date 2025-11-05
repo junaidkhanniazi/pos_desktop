@@ -11,9 +11,6 @@ class OwnerEntity {
   final OwnerStatus status;
   final DateTime createdAt;
 
-  // 🔹 NEW: Activation Code (restored for approval flow)
-  final String? activationCode;
-
   // 🔹 Subscription Fields
   final String? subscriptionPlan;
   final String? receiptImage;
@@ -32,7 +29,6 @@ class OwnerEntity {
     this.superAdminId, // ✅ ADDED
     required this.status,
     required this.createdAt,
-    this.activationCode,
     this.subscriptionPlan,
     this.receiptImage,
     this.paymentDate,
@@ -52,7 +48,6 @@ class OwnerEntity {
     String? superAdminId, // ✅ ADDED
     OwnerStatus? status,
     DateTime? createdAt,
-    String? activationCode,
     String? subscriptionPlan,
     String? receiptImage,
     DateTime? paymentDate,
@@ -70,7 +65,6 @@ class OwnerEntity {
       superAdminId: superAdminId ?? this.superAdminId, // ✅ ADDED
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
-      activationCode: activationCode ?? this.activationCode,
       subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
       receiptImage: receiptImage ?? this.receiptImage,
       paymentDate: paymentDate ?? this.paymentDate,
@@ -131,7 +125,6 @@ class OwnerEntity {
           other.superAdminId == superAdminId && // ✅ ADDED
           other.status == status &&
           other.createdAt == createdAt &&
-          other.activationCode == activationCode &&
           other.subscriptionPlan == subscriptionPlan &&
           other.receiptImage == receiptImage &&
           other.paymentDate == paymentDate &&
@@ -150,7 +143,6 @@ class OwnerEntity {
     superAdminId, // ✅ ADDED
     status,
     createdAt,
-    activationCode,
     subscriptionPlan,
     receiptImage,
     paymentDate,
@@ -165,7 +157,7 @@ class OwnerEntity {
       'password: ${password.isNotEmpty ? "***" : "empty"}, ' // ✅ ADDED
       'contact: $contact, ' // ✅ ADDED
       'superAdminId: $superAdminId, ' // ✅ ADDED
-      'status: $status, activationCode: $activationCode, '
+      'status: $status, '
       'subscriptionPlan: $subscriptionPlan, '
       'start: $subscriptionStartDate, end: $subscriptionEndDate, '
       'active: $isSubscriptionActive, expiringSoon: $isSubscriptionExpiringSoon)';

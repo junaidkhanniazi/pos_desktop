@@ -18,22 +18,31 @@ void main() async {
 
   final dbHelper = DatabaseHelper();
   final database = await dbHelper.database; // ✅ Initialize system DB
-  final syncService = SyncService();
+  final syncService = SyncService(ownerName: 'junaid'); // 👈 Add ownerName
+  // ====== Add push/pull calls here ======
+  final storeDbPath =
+      'C:/Users/Admin/Documents/Pos_Desktop/pos_data/junaid/junaid_junaid_sweets/store.db';
+  await syncService.pushDatabase(storeDbPath); // Push all unsynced rows
+  await syncService.pullDatabase(storeDbPath, [
+    'products',
+    'customers',
+  ]); // Pull latest data
+  // =====================================
+
   // await syncService.scanUnsyncedData(
   //   'C:\\Users\\Admin\\Documents\\Pos_Desktop\\pos_data\\junaid\\junaid_junaid_tailor\\store.db',
   // );
-  await syncService.pushUnsyncedData(
-    'C:\\Users\\Admin\\Documents\\Pos_Desktop\\pos_data\\junaid\\junaid_junaid_tailor\\store.db',
-  );
-  await syncService.pullFromServer(
-    'C:\\Users\\Admin\\Documents\\Pos_Desktop\\pos_data\\junaid\\junaid_junaid_tailor\\store.db',
-  );
+  // await syncService.pushUnsyncedData(
+  //   'C:\\Users\\Admin\\Documents\\Pos_Desktop\\pos_data\\junaid\\junaid_junaid_tailor\\store.db',
+  // );
+  // await syncService.pullFromServer(
+  //   'C:\\Users\\Admin\\Documents\\Pos_Desktop\\pos_data\\junaid\\junaid_junaid_tailor\\store.db',
+  // );
 
   // ✅ Ensure Super Admin exists
   final superAdminDao = SuperAdminDao();
   final ownerDao = OwnerDao();
 
-  await ownerDao.expireOwnerNow(9);
   // await ownerDao.createTestExpiredOwner();
 
   await superAdminDao.insertSuperAdmin(

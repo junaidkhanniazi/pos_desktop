@@ -39,27 +39,16 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const OwnerSignupScreen());
 
       case AppRoutes.subscriptionPlans:
-        final args =
-            settings.arguments as Map<String, String>; // ✅ More specific type
+        // ✅ No longer require arguments - will fetch from temp storage
         return MaterialPageRoute(
-          builder: (_) => SubscriptionPlansScreen(
-            shopName: args['shopName']!,
-            ownerName: args['ownerName']!,
-            email: args['email']!,
-            password: args['password']!,
-            contact: args['contact']!,
-          ),
+          builder: (_) => const SubscriptionPlansScreen(),
         );
 
       case AppRoutes.payment:
-        final args = settings.arguments as Map<String, dynamic>;
+        // ✅ Only need the selected plan, rest comes from temp storage
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
         return MaterialPageRoute(
           builder: (_) => PaymentScreen(
-            shopName: args['shopName'] as String,
-            ownerName: args['ownerName'] as String,
-            email: args['email'] as String,
-            password: args['password'] as String,
-            contact: args['contact'] as String,
             selectedPlan: args['selectedPlan'] as SubscriptionPlanEntity,
           ),
         );

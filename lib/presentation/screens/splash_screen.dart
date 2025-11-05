@@ -36,7 +36,8 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 1));
 
     // ✅ FIRST CHECK IF SUBSCRIPTION EXPIRED AND AUTO LOGOUT
-    final shouldRedirect = await AuthStorageHelper.shouldRedirectToLogin();
+    final shouldRedirect =
+        await AuthStorageHelper.checkAndHandleExpiredSubscription();
 
     if (shouldRedirect && mounted) {
       // Subscription expired, show message and go to login

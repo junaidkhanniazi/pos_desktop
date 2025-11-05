@@ -1,118 +1,172 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:pos_desktop/core/errors/exception_handler.dart';
+import 'package:logger/logger.dart'; // ✅ use your AppToast file
 import 'package:pos_desktop/core/utils/toast_helper.dart';
-import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
-import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
+import 'package:pos_desktop/domain/entities/subscription_entity.dart';
+import 'package:pos_desktop/domain/usecases/add_subscription_usecase.dart';
+import 'package:pos_desktop/domain/usecases/get_subscriptions_by_owner_usecase.dart';
+import 'package:pos_desktop/domain/usecases/get_active_subscription_usecase.dart';
+import 'package:pos_desktop/domain/usecases/update_subscription_status_usecase.dart';
+import 'package:pos_desktop/domain/usecases/mark_expired_subscriptions_usecase.dart';
 
-class SubscriptionManagementController extends GetxController {
-  final SubscriptionPlanDao _dao;
-  final BuildContext context;
+class SubscriptionManagementController extends ChangeNotifier {
+  final AddSubscriptionUseCase addSubscriptionUseCase;
+  final GetSubscriptionsByOwnerUseCase getSubscriptionsByOwnerUseCase;
+  final GetActiveSubscriptionUseCase getActiveSubscriptionUseCase;
+  final UpdateSubscriptionStatusUseCase updateSubscriptionStatusUseCase;
+  final MarkExpiredSubscriptionsUseCase markExpiredSubscriptionsUseCase;
 
-  SubscriptionManagementController(this._dao, this.context);
+  final _logger = Logger();
+  bool isLoading = false;
+  List<SubscriptionEntity> ownerSubscriptions = [];
+  SubscriptionEntity? activeSubscription;
 
-  /// Observable list of plans
-  var plans = <SubscriptionPlanEntity>[].obs;
+  SubscriptionManagementController({
+    required this.addSubscriptionUseCase,
+    required this.getSubscriptionsByOwnerUseCase,
+    required this.getActiveSubscriptionUseCase,
+    required this.updateSubscriptionStatusUseCase,
+    required this.markExpiredSubscriptionsUseCase,
+  });
 
-  /// Loading state
-  var isLoading = false.obs;
+  // ======================================================
+  // 🟢 Owner: Add subscription (after payment upload)
+  // ======================================================
+  Future<void> addSubscription(
+    BuildContext context, {
+    required String ownerId,
+    required int planId,
+    required String planName,
+    required double amount,
+    required String receiptImage,
+  }) async {
+    try {
+      isLoading = true;
+      notifyListeners();
 
-  @override
-  void onInit() {
-    super.onInit();
-    print('🔄 Controller onInit called');
-    loadPlans();
+      final now = DateTime.now();
+      final subscription = SubscriptionEntity(
+        id: '',
+        ownerId: ownerId,
+        subscriptionPlanId: planId.toString(),
+        subscriptionPlanName: planName,
+        subscriptionAmount: amount,
+        receiptImage: receiptImage,
+        status: 'inactive', // pending admin approval
+        paymentDate: now,
+        subscriptionStartDate: now,
+        subscriptionEndDate: now.add(const Duration(days: 30)),
+      );
+
+      await addSubscriptionUseCase(subscription);
+      AppToast.show(
+        context,
+        message: 'Subscription submitted for approval',
+        type: ToastType.success,
+      );
+      _logger.i('🧾 Subscription created for ownerId=$ownerId plan=$planName');
+    } catch (e) {
+      _logger.e('❌ Failed to add subscription: $e');
+      AppToast.show(
+        context,
+        message: 'Failed to add subscription',
+        type: ToastType.error,
+      );
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
-  /// Load all active subscription plans from DB
-  Future<void> loadPlans() async {
+  // ======================================================
+  // 🟣 Owner/Admin: Get all subscriptions for owner
+  // ======================================================
+  Future<void> loadSubscriptions(String ownerId) async {
     try {
-      print('🔄 Loading plans from database...');
-      isLoading.value = true;
-      final result = await _dao.getAllActivePlans();
-      print('✅ Plans loaded: ${result.length}');
+      isLoading = true;
+      notifyListeners();
 
-      for (final plan in result) {
-        print('   - ${plan.name}: ${plan.price}');
+      final subs = await getSubscriptionsByOwnerUseCase(ownerId);
+      ownerSubscriptions = subs;
+      _logger.i('📦 Loaded ${subs.length} subscriptions for ownerId=$ownerId');
+    } catch (e) {
+      _logger.e('❌ Failed to load subscriptions: $e');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ======================================================
+  // 🟢 Owner/Admin: Get active subscription
+  // ======================================================
+  Future<void> loadActiveSubscription(String ownerId) async {
+    try {
+      final sub = await getActiveSubscriptionUseCase(ownerId);
+      activeSubscription = sub;
+      if (sub != null) {
+        _logger.i('✅ Active subscription found: ${sub.subscriptionPlanName}');
+      } else {
+        _logger.w('⚠️ No active subscription for ownerId=$ownerId');
       }
-
-      plans.value = result;
+      notifyListeners();
     } catch (e) {
-      print('❌ Error loading plans: $e');
-      AppToast.show(
-        context,
-        message: ExceptionHandler.handle(e).message,
-        type: ToastType.error,
-      );
-    } finally {
-      isLoading.value = false;
-      print('🏁 Loading completed');
+      _logger.e('❌ Failed to load active subscription: $e');
     }
   }
 
-  /// Add a new plan
-  Future<void> addPlan(SubscriptionPlanEntity plan) async {
+  // ======================================================
+  // 🟡 Admin: Approve or Reject subscription
+  // ======================================================
+  Future<void> updateSubscriptionStatus(
+    BuildContext context, {
+    required String subscriptionId,
+    required String status, // 'active' | 'rejected'
+  }) async {
     try {
-      isLoading.value = true;
-      await _dao.insertPlan(plan);
-      await loadPlans();
+      isLoading = true;
+      notifyListeners();
+
+      await updateSubscriptionStatusUseCase(subscriptionId, status);
+      _logger.i('🔄 Subscription $subscriptionId updated to $status');
+
       AppToast.show(
         context,
-        message: 'Plan added successfully',
-        type: ToastType.success,
+        message: status == 'active'
+            ? 'Subscription activated'
+            : 'Subscription rejected',
+        type: status == 'active' ? ToastType.success : ToastType.warning,
       );
     } catch (e) {
+      _logger.e('❌ Failed to update subscription status: $e');
       AppToast.show(
         context,
-        message: ExceptionHandler.handle(e).message,
+        message: 'Failed to update status',
         type: ToastType.error,
       );
     } finally {
-      isLoading.value = false;
+      isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// Edit an existing plan
-  Future<void> editPlan(SubscriptionPlanEntity plan) async {
+  // ======================================================
+  // 🔄 System: Mark expired subscriptions
+  // ======================================================
+  Future<void> markExpiredSubscriptions() async {
     try {
-      isLoading.value = true;
-      await _dao.insertPlan(plan); // Replace existing plan by id
-      await loadPlans();
-      AppToast.show(
-        context,
-        message: 'Plan updated successfully',
-        type: ToastType.success,
-      );
+      await markExpiredSubscriptionsUseCase();
+      _logger.i('⌛ Expired subscriptions marked successfully');
     } catch (e) {
-      AppToast.show(
-        context,
-        message: ExceptionHandler.handle(e).message,
-        type: ToastType.error,
-      );
-    } finally {
-      isLoading.value = false;
+      _logger.e('❌ Failed to mark expired subscriptions: $e');
     }
   }
 
-  /// Delete a plan
-  Future<void> deletePlan(int planId) async {
-    try {
-      isLoading.value = true;
-      await _dao.deletePlan(planId);
-      await loadPlans();
-      AppToast.show(
-        context,
-        message: 'Plan deleted successfully',
-        type: ToastType.success,
-      );
-    } catch (e) {
-      AppToast.show(
-        context,
-        message: ExceptionHandler.handle(e).message,
-        type: ToastType.error,
-      );
-    } finally {
-      isLoading.value = false;
-    }
+  // ======================================================
+  // 🧹 Clear state
+  // ======================================================
+  void clear() {
+    ownerSubscriptions = [];
+    activeSubscription = null;
+    notifyListeners();
   }
 }

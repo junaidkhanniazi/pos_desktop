@@ -1,7 +1,11 @@
+import 'dart:convert';
+
+import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
-import 'package:pos_desktop/data/models/owner_model.dart'; // ✅ ADD THIS IMPORT
+import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
+import 'package:pos_desktop/data/models/subscription_model.dart';
 
 class AuthStorageHelper {
   static const _keyIsLoggedIn = 'is_logged_in';
@@ -10,8 +14,14 @@ class AuthStorageHelper {
   static const _keyOwnerId = 'owner_id';
   static const _keyStaffRole = 'staff_role';
   static const _keyAdminId = 'admin_id';
+  static const _keyTempOwnerData = 'temp_owner_data';
 
-  /// Save login info
+  static final _logger = Logger();
+
+  // ======================================================
+  // 🔹 Login Data
+  // ======================================================
+
   static Future<void> saveLogin({
     required AuthRole role,
     required String email,
@@ -28,35 +38,19 @@ class AuthStorageHelper {
     if (adminId != null) await prefs.setString(_keyAdminId, adminId);
   }
 
-  static Future<AuthRole?> getRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    final roleName = prefs.getString(_keyRole);
-    if (roleName == null) return null;
-    try {
-      return AuthRole.values.firstWhere((r) => r.name == roleName);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<String?> getStaffRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyStaffRole);
-  }
-
-  static Future<String?> getAdminId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyAdminId);
-  }
-
   static Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyIsLoggedIn) ?? false;
   }
 
-  static Future<void> logout() async {
+  static Future<AuthRole?> getRole() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    final name = prefs.getString(_keyRole);
+    if (name == null) return null;
+    return AuthRole.values.firstWhere(
+      (r) => r.name == name,
+      orElse: () => AuthRole.owner,
+    );
   }
 
   static Future<String?> getEmail() async {
@@ -69,97 +63,112 @@ class AuthStorageHelper {
     return prefs.getString(_keyOwnerId);
   }
 
-  // ✅ NEW METHODS FOR SUBSCRIPTION EXPIRATION CHECK
-
-  /// 🔹 Check if logged-in owner's subscription has expired
-  static Future<bool> isSubscriptionExpired() async {
-    try {
-      final role = await getRole();
-      if (role != AuthRole.owner) return false; // Only for owners
-
-      final email = await getEmail();
-      if (email == null) return false;
-
-      final ownerDao = OwnerDao();
-      final owner = await ownerDao.getOwnerByEmail(email);
-
-      return owner?.isSubscriptionExpired ?? true;
-    } catch (e) {
-      print('❌ Error checking subscription: $e');
-      return true; // Safe side - assume expired if error
-    }
+  static Future<String?> getAdminId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyAdminId);
   }
 
-  /// 🔹 Get owner by email (helper method) - FIXED: OwnerModel instead of Owner
-  static Future<OwnerModel?> getCurrentOwner() async {
+  static Future<String?> getStaffRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyStaffRole);
+  }
+
+  static Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+  // ======================================================
+  // 🔹 Subscription Handling (via SubscriptionDao)
+  // ======================================================
+
+  static Future<SubscriptionModel?> _getActiveSubscription() async {
     try {
       final email = await getEmail();
       if (email == null) return null;
 
       final ownerDao = OwnerDao();
-      return await ownerDao.getOwnerByEmail(email);
+      final owner = await ownerDao.getOwnerByEmail(email);
+      if (owner == null) return null;
+
+      final subDao = SubscriptionDao();
+      return await subDao.getActiveSubscription(owner.id!);
     } catch (e) {
-      print('❌ Error getting current owner: $e');
+      _logger.e('❌ Error fetching active subscription: $e');
       return null;
     }
   }
 
-  /// 🔹 Force logout if subscription expired
+  static Future<bool> isSubscriptionExpired() async {
+    final sub = await _getActiveSubscription();
+    if (sub == null) return true;
+    return sub.isExpired;
+  }
+
+  static Future<Map<String, dynamic>> getSubscriptionStatus() async {
+    final sub = await _getActiveSubscription();
+    if (sub == null) {
+      return {'isExpired': true, 'message': 'No active subscription'};
+    }
+
+    final endDate = sub.subscriptionEndDate != null
+        ? DateTime.tryParse(sub.subscriptionEndDate!)
+        : null;
+
+    return {
+      'isExpired': sub.isExpired,
+      'isExpiringSoon': sub.isExpiringSoon,
+      'endDate': sub.subscriptionEndDate,
+      'daysLeft': endDate != null
+          ? endDate.difference(DateTime.now()).inDays
+          : 0,
+      'message': sub.isExpired
+          ? 'Subscription expired'
+          : sub.isExpiringSoon
+          ? 'Subscription expiring soon'
+          : 'Subscription active',
+    };
+  }
+
+  static Future<void> saveTempOwnerData(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyTempOwnerData, jsonEncode(data));
+  }
+
+  static Future<Map<String, dynamic>?> getTempOwnerData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_keyTempOwnerData);
+    if (jsonString == null) return null;
+    return jsonDecode(jsonString);
+  }
+
+  static Future<void> clearTempOwnerData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyTempOwnerData);
+  }
+
   static Future<bool> checkAndHandleExpiredSubscription() async {
     try {
-      final bool userIsLoggedIn = await isLoggedIn(); // ✅ RENAMED VARIABLE
-      if (!userIsLoggedIn) return false;
+      final loggedIn = await isLoggedIn();
+      if (!loggedIn) return false;
+
+      final role = await getRole();
+
+      // ✅ ONLY CHECK SUBSCRIPTION FOR OWNERS, NOT SUPER ADMIN OR STAFF
+      if (role != AuthRole.owner) {
+        _logger.i('✅ Skipping subscription check for role: $role');
+        return false;
+      }
 
       if (await isSubscriptionExpired()) {
         await logout();
-        print('✅ Auto-logged out due to expired subscription');
-        return true; // Subscription expired and logged out
+        _logger.w('⚠️ Auto-logged out due to expired subscription');
+        return true;
       }
-      return false; // Subscription active
+      return false;
     } catch (e) {
-      print('❌ Error in subscription check: $e');
+      _logger.e('❌ Error during subscription check: $e');
       return false;
     }
-  }
-
-  /// 🔹 Get subscription status with details - FIXED: OwnerModel instead of Owner
-  static Future<Map<String, dynamic>> getSubscriptionStatus() async {
-    try {
-      final role = await getRole();
-      if (role != AuthRole.owner) {
-        return {'isExpired': false, 'message': 'Not an owner account'};
-      }
-
-      final owner = await getCurrentOwner();
-      if (owner == null) {
-        return {'isExpired': true, 'message': 'Owner not found'};
-      }
-
-      return {
-        'isExpired': owner.isSubscriptionExpired,
-        'isExpiringSoon': owner.isSubscriptionExpiringSoon,
-        'endDate': owner.subscriptionEndDate,
-        'daysLeft': owner.isSubscriptionExpired
-            ? 0
-            : DateTime.parse(
-                owner.subscriptionEndDate!,
-              ).difference(DateTime.now()).inDays,
-        'message': owner.isSubscriptionExpired
-            ? 'Subscription expired'
-            : owner.isSubscriptionExpiringSoon
-            ? 'Subscription expiring soon'
-            : 'Subscription active',
-      };
-    } catch (e) {
-      return {'isExpired': true, 'message': 'Error checking status: $e'};
-    }
-  }
-
-  /// 🔹 Check if user should be redirected to login due to expired subscription
-  static Future<bool> shouldRedirectToLogin() async {
-    final bool userLoggedIn = await isLoggedIn(); // ✅ RENAMED VARIABLE
-    if (!userLoggedIn) return false;
-
-    return await checkAndHandleExpiredSubscription();
   }
 }

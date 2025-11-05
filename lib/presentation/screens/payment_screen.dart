@@ -3,51 +3,64 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
 import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_loader.dart';
-import 'package:pos_desktop/data/local/dao/owner_dao.dart';
-import 'package:pos_desktop/domain/entities/owner_entity.dart';
-import 'package:pos_desktop/domain/repositories/repositories_impl/owner_repository_impl.dart';
+import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
+import 'package:pos_desktop/data/models/subscription_model.dart';
 
 class PaymentScreen extends StatefulWidget {
-  final String shopName;
-  final String ownerName;
-  final String email;
-  final String password;
-  final String contact; // ✅ CHANGED: from String? to String (required)
   final SubscriptionPlanEntity selectedPlan;
 
-  const PaymentScreen({
-    super.key,
-    required this.shopName,
-    required this.ownerName,
-    required this.email,
-    required this.password,
-    required this.contact, // ✅ CHANGED: from optional to required
-    required this.selectedPlan,
-  });
+  const PaymentScreen({super.key, required this.selectedPlan});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  final OwnerDao _ownerDao = OwnerDao();
   File? _receiptImage;
   bool _isSubmitting = false;
+  bool _isLoadingData = true; // ✅ Add loading state for temp data
+  final _subscriptionDao = SubscriptionDao();
+  Map<String, dynamic>? _tempOwnerData;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTempData();
+  }
+
+  Future<void> _loadTempData() async {
+    try {
+      _tempOwnerData = await AuthStorageHelper.getTempOwnerData();
+      print('📋 Payment screen loaded temp data: $_tempOwnerData');
+
+      // ✅ Force UI rebuild after data is loaded
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading temp data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+        });
+      }
+    }
+  }
 
   Future<void> _pickFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.image,
       );
-
       if (result != null && result.files.single.path != null) {
-        setState(() {
-          _receiptImage = File(result.files.single.path!);
-        });
+        setState(() => _receiptImage = File(result.files.single.path!));
       }
     } catch (e) {
       AppToast.show(
@@ -68,35 +81,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
+    if (_tempOwnerData == null) {
+      AppToast.show(
+        context,
+        message:
+            'Owner data not found. Please restart the registration process.',
+        type: ToastType.error,
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
-      // ✅ Create OwnerEntity with ALL required fields
-      final ownerEntity = OwnerEntity(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: widget.ownerName,
-        email: widget.email,
-        storeName: widget.shopName,
-        password: widget.password, // ✅ ADDED: Required field
-        contact: widget.contact, // ✅ ADDED: Required field
-        superAdminId: null, // ✅ ADDED: Can be null
-        status: OwnerStatus.pending,
-        createdAt: DateTime.now(),
-        activationCode: null, // ✅ ADDED: Can be null
-        subscriptionPlan: widget.selectedPlan.name,
+      final ownerId =
+          int.tryParse(_tempOwnerData!['ownerId']?.toString() ?? '0') ?? 0;
+
+      final now = DateTime.now();
+      final model = SubscriptionModel(
+        ownerId: ownerId,
+        subscriptionPlanId: widget.selectedPlan.id,
+        subscriptionPlanName: widget.selectedPlan.name,
+        status: 'inactive',
         receiptImage: _receiptImage!.path,
-        paymentDate: DateTime.now(),
+        paymentDate: now.toIso8601String(),
         subscriptionAmount: widget.selectedPlan.price,
-        subscriptionStartDate: null, // Will be set when approved
-        subscriptionEndDate: null, // Will be set when approved
+        subscriptionStartDate: now.toIso8601String(),
+        subscriptionEndDate: now
+            .add(Duration(days: widget.selectedPlan.durationDays))
+            .toIso8601String(),
+        createdAt: now.toIso8601String(),
+        updatedAt: now.toIso8601String(),
       );
 
-      final repo = OwnerRepositoryImpl();
-      await repo.addOwner(ownerEntity);
+      await _subscriptionDao.insertSubscription(model);
+      await AuthStorageHelper.clearTempOwnerData();
 
       AppToast.show(
         context,
-        message: 'Request submitted successfully! Wait for admin approval.',
+        message: 'Payment submitted for admin approval',
         type: ToastType.success,
       );
 
@@ -146,6 +169,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildLeftSummary() {
+    // ✅ Show loading indicator while temp data is loading
+    if (_isLoadingData) {
+      return Container(
+        width: 360,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border(
+            right: BorderSide(color: AppColors.border.withOpacity(0.2)),
+          ),
+          boxShadow: [
+            BoxShadow(color: AppColors.shadow.withOpacity(0.08), blurRadius: 8),
+          ],
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(height: 16),
+            Text('Loading your information...'),
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: 360,
       padding: const EdgeInsets.all(32),
@@ -168,14 +216,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 24),
           _buildPlanCard(),
           const SizedBox(height: 24),
-          _infoRow(Icons.store_rounded, "Store Name", widget.shopName),
-          _infoRow(Icons.person_rounded, "Owner Name", widget.ownerName),
-          _infoRow(Icons.email_rounded, "Email", widget.email),
+          // ✅ Use null-aware operators with fallbacks
+          _infoRow(
+            Icons.store_rounded,
+            "Store Name",
+            _tempOwnerData?['shopName']?.toString() ?? 'Loading...',
+          ),
+          _infoRow(
+            Icons.person_rounded,
+            "Owner Name",
+            _tempOwnerData?['ownerName']?.toString() ?? 'Loading...',
+          ),
+          _infoRow(
+            Icons.email_rounded,
+            "Email",
+            _tempOwnerData?['email']?.toString() ?? 'Loading...',
+          ),
           _infoRow(
             Icons.phone_rounded,
             "Contact",
-            widget.contact,
-          ), // ✅ Now required
+            _tempOwnerData?['contact']?.toString() ?? 'Loading...',
+          ),
           const Spacer(),
           Divider(color: AppColors.border.withOpacity(0.3)),
           const SizedBox(height: 16),
@@ -197,84 +258,78 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildPlanCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withOpacity(0.1),
-            AppColors.primary.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.primary,
-            child: const Icon(Icons.workspace_premium, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            widget.selectedPlan.name,
-            style: AppText.h3.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Rs. ${widget.selectedPlan.price.toStringAsFixed(0)} for ${widget.selectedPlan.durationDays} days",
-            style: AppText.small.copyWith(color: AppColors.textLight),
-          ),
+  Widget _buildPlanCard() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          AppColors.primary.withOpacity(0.1),
+          AppColors.primary.withOpacity(0.05),
         ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.primary, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppText.small.copyWith(color: AppColors.textLight),
-                ),
-                Text(
-                  value,
-                  style: AppText.body.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+    ),
+    child: Column(
       children: [
-        Text("Upload Payment Receipt", style: AppText.h1),
+        CircleAvatar(
+          radius: 24,
+          backgroundColor: AppColors.primary,
+          child: const Icon(Icons.workspace_premium, color: Colors.white),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          widget.selectedPlan.name,
+          style: AppText.h3.copyWith(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 6),
         Text(
-          "Please upload your payment receipt to activate your account.",
-          style: AppText.body.copyWith(color: AppColors.textLight),
+          "Rs. ${widget.selectedPlan.price.toStringAsFixed(0)} for ${widget.selectedPlan.durationDays} days",
+          style: AppText.small.copyWith(color: AppColors.textLight),
         ),
       ],
-    );
-  }
+    ),
+  );
+
+  Widget _infoRow(IconData icon, String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Row(
+      children: [
+        Icon(icon, color: AppColors.primary, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: AppText.small.copyWith(color: AppColors.textLight),
+              ),
+              Text(
+                value,
+                style: AppText.body.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildHeader() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text("Upload Payment Receipt", style: AppText.h1),
+      const SizedBox(height: 6),
+      Text(
+        "Please upload your payment receipt to activate your account.",
+        style: AppText.body.copyWith(color: AppColors.textLight),
+      ),
+    ],
+  );
 
   Widget _buildUploadCard() {
     return Container(
@@ -322,7 +377,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
               children: [
                 Container(
                   width: double.infinity,
-                  constraints: BoxConstraints(minHeight: 200, maxHeight: 400),
+                  constraints: const BoxConstraints(
+                    minHeight: 200,
+                    maxHeight: 400,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
@@ -335,7 +393,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       _receiptImage!,
                       width: double.infinity,
                       fit: BoxFit.contain,
-                      alignment: Alignment.center,
                     ),
                   ),
                 ),
@@ -396,47 +453,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildSubmitSection() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.verified_rounded, color: AppColors.success, size: 28),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  "Your payment info is secure and encrypted.",
-                  style: AppText.small.copyWith(color: AppColors.textLight),
-                ),
+  Widget _buildSubmitSection() => Column(
+    children: [
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.verified_rounded, color: AppColors.success, size: 28),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                "Your payment info is secure and encrypted.",
+                style: AppText.small.copyWith(color: AppColors.textLight),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-        AppButton(
-          label: "Submit for Approval",
-          icon: Icons.send_rounded,
-          width: double.infinity,
-          onPressed: _receiptImage != null ? _submitRequest : null,
-          isDisabled: _receiptImage == null,
+      ),
+      const SizedBox(height: 24),
+      AppButton(
+        label: "Submit for Approval",
+        icon: Icons.send_rounded,
+        width: double.infinity,
+        onPressed: _receiptImage != null ? _submitRequest : null,
+        isDisabled: _receiptImage == null,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        "Once verified, your account will be activated within 24 hours.",
+        style: AppText.small.copyWith(
+          color: AppColors.textLight,
+          fontStyle: FontStyle.italic,
         ),
-        const SizedBox(height: 10),
-        Text(
-          "Once verified, your account will be activated within 24 hours.",
-          style: AppText.small.copyWith(
-            color: AppColors.textLight,
-            fontStyle: FontStyle.italic,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
+        textAlign: TextAlign.center,
+      ),
+    ],
+  );
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:pos_desktop/domain/repositories/owner_repository.dart';
 
 class ActivateOwnerUseCase {
@@ -10,7 +11,13 @@ class ActivateOwnerUseCase {
     String ownerId,
     String superAdminId,
     int durationDays,
+    BuildContext context,
   ) async {
-    await _repository.activateOwner(ownerId, superAdminId, durationDays);
+    await _repository.activateOwner(
+      ownerId,
+      superAdminId,
+      durationDays,
+      context,
+    );
   }
 }

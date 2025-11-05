@@ -1,7 +1,11 @@
 // domain/repositories/repositories_impl/owner_repository_impl.dart
+import 'package:flutter/material.dart';
 import 'package:pos_desktop/data/local/dao/owner_dao.dart';
+import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
+import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/models/owner_model.dart';
 import 'package:pos_desktop/domain/entities/owner_entity.dart';
+import 'package:pos_desktop/domain/entities/subscription_entity.dart';
 import 'package:pos_desktop/domain/repositories/owner_repository.dart';
 
 class OwnerRepositoryImpl implements OwnerRepository {
@@ -25,30 +29,38 @@ class OwnerRepositoryImpl implements OwnerRepository {
       status: owner.status.name,
       isActive: owner.status == OwnerStatus.active,
       createdAt: owner.createdAt.toIso8601String(),
-      activationCode: owner.activationCode, // ✅ ADDED: Missing field
-      subscriptionPlan: owner.subscriptionPlan,
-      receiptImage: owner.receiptImage,
-      paymentDate: owner.paymentDate?.toIso8601String(),
-      subscriptionAmount: owner.subscriptionAmount,
-      subscriptionStartDate: owner.subscriptionStartDate
-          ?.toIso8601String(), // ✅ ADDED: Missing field
-      subscriptionEndDate: owner.subscriptionEndDate?.toIso8601String(),
     );
     await _ownerDao.insertOwner(model);
   }
 
   @override
-  // ✅ NEW - With all required parameters
   Future<void> activateOwner(
     String ownerId,
     String superAdminId,
     int durationDays,
+    BuildContext context,
   ) async {
+    // 1️⃣ Activate the owner
     await _ownerDao.activateOwner(
       int.parse(ownerId),
       int.parse(superAdminId),
       durationDays,
+      context,
     );
+
+    // 2️⃣ Also mark the owner’s subscription as ACTIVE
+    try {
+      final db = await DatabaseHelper().database;
+      await db.update(
+        'subscriptions',
+        {'status': 'active'},
+        where: 'owner_id = ?',
+        whereArgs: [int.parse(ownerId)],
+      );
+      debugPrint("✅ Subscription activated for owner_id=$ownerId");
+    } catch (e) {
+      debugPrint("❌ Failed to activate subscription for owner_id=$ownerId: $e");
+    }
   }
 
   @override
@@ -106,11 +118,7 @@ class OwnerRepositoryImpl implements OwnerRepository {
     String? activationCode,
   }) async {
     try {
-      final model = await _ownerDao.getOwnerByCredentials(
-        email,
-        password,
-        activationCode: activationCode,
-      );
+      final model = await _ownerDao.getOwnerByCredentials(email, password);
       return model?.toEntity();
     } catch (e) {
       throw Exception("Error fetching owner by credentials: $e");
@@ -179,6 +187,24 @@ class OwnerRepositoryImpl implements OwnerRepository {
       return models.map((m) => m.toEntity()).toList();
     } catch (e) {
       throw Exception("Error fetching expired subscriptions: $e");
+    }
+  }
+
+  @override
+  Future<SubscriptionEntity?> getOwnerSubscription(String ownerId) async {
+    try {
+      // ✅ Access SubscriptionDao directly
+      final subscriptionDao = SubscriptionDao();
+
+      // ✅ Get the active subscription for this owner
+      final model = await subscriptionDao.getActiveSubscription(
+        int.parse(ownerId),
+      );
+
+      // ✅ Return as entity
+      return model?.toEntity();
+    } catch (e) {
+      throw Exception("Error fetching owner subscription: $e");
     }
   }
 }

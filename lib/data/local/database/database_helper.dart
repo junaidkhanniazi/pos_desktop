@@ -70,7 +70,7 @@ class DatabaseHelper {
       final db = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 3,
+          version: 5, // ✅ CHANGED: Incremented to 5 for activation code removal
           onCreate: _createSystemTables,
           onUpgrade: _upgradeDatabase,
           onConfigure: (db) async {
@@ -90,7 +90,7 @@ class DatabaseHelper {
   }
 
   // ======================================================
-  // MASTER DB (per Owner)
+  // MASTER DB (per Owner) - UPDATED FOLDER STRUCTURE
   // ======================================================
   Future<Database> openMasterDB(int ownerId, String ownerName) async {
     try {
@@ -98,14 +98,13 @@ class DatabaseHelper {
       final posDesktopFolder = Directory(
         join(documentsDir.path, 'Pos_Desktop'),
       );
-      final posDataFolder = join(posDesktopFolder.path, 'pos_data');
-      final ownerFolder = join(posDataFolder, ownerName.toLowerCase());
+
+      // ✅ FOLDER STRUCTURE: Pos_Desktop/owners/owner_name/
+      final ownersFolder = join(posDesktopFolder.path, 'owners');
+      final ownerFolder = join(ownersFolder, ownerName.toLowerCase());
       await Directory(ownerFolder).create(recursive: true);
 
-      final masterPath = join(
-        ownerFolder,
-        '${ownerName.toLowerCase()}_master.db',
-      );
+      final masterPath = join(ownerFolder, 'master.db');
       _logger.i('📂 Opening Master DB for $ownerName → $masterPath');
 
       final db = await databaseFactory.openDatabase(
@@ -136,10 +135,7 @@ class DatabaseHelper {
   }
 
   // ======================================================
-  // STORE DB (per Store)
-  // ======================================================
-  // ======================================================
-  // STORE DB (per Store)
+  // STORE DB (per Store) - UPDATED FOLDER STRUCTURE
   // ======================================================
   Future<Database> openStoreDB(
     int ownerId,
@@ -152,22 +148,21 @@ class DatabaseHelper {
       final posDesktopFolder = Directory(
         join(documentsDir.path, 'Pos_Desktop'),
       );
-      final posDataFolder = join(posDesktopFolder.path, 'pos_data');
-      final ownerFolder = join(posDataFolder, ownerName.toLowerCase());
 
-      final safeStoreName = storeName.toLowerCase().replaceAll(' ', '_');
-      final storeFolderPath = join(
-        ownerFolder,
-        '${ownerName.toLowerCase()}_$safeStoreName',
-      );
-      final storeFolder = Directory(storeFolderPath);
+      // ✅ FOLDER STRUCTURE: Pos_Desktop/owners/owner_name/stores/
+      final ownersFolder = join(posDesktopFolder.path, 'owners');
+      final ownerFolder = join(ownersFolder, ownerName.toLowerCase());
+      final storesFolder = join(ownerFolder, 'stores');
 
-      if (!storeFolder.existsSync()) {
-        await storeFolder.create(recursive: true);
-        _logger.i('📁 Created new store folder: $storeFolderPath');
+      // Create stores folder if not exists
+      if (!Directory(storesFolder).existsSync()) {
+        await Directory(storesFolder).create(recursive: true);
+        _logger.i('📁 Created stores folder: $storesFolder');
       }
 
-      final dbPath = join(storeFolder.path, 'store.db');
+      // ✅ DIRECT .db FILE: stores_folder/store_name.db
+      final safeStoreName = storeName.toLowerCase().replaceAll(' ', '');
+      final dbPath = join(storesFolder, '$safeStoreName.db');
       _logger.i('🏪 Opening store DB: $dbPath');
 
       final db = await databaseFactory.openDatabase(
@@ -176,8 +171,6 @@ class DatabaseHelper {
           version: 2,
           onCreate: (db, _) async => createStoreTables(db),
           onUpgrade: (db, oldV, newV) async => upgradeStoreDb(db, oldV, newV),
-
-          // ✅ This block verifies tables exist even if DB already exists
           onOpen: (db) async {
             try {
               _logger.i('🧩 Verifying store DB schema...');
@@ -187,7 +180,6 @@ class DatabaseHelper {
               _logger.e('❌ Failed verifying store tables: $e');
             }
           },
-
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
             await db.execute('PRAGMA busy_timeout = 10000');
@@ -205,7 +197,50 @@ class DatabaseHelper {
   }
 
   // ======================================================
-  // STORE TABLES (Sync-ready)
+  // GET OWNER FOLDER PATH (Helper Method)
+  // ======================================================
+  Future<String> getOwnerFolderPath(String ownerName) async {
+    final documentsDir = await getApplicationDocumentsDirectory();
+    final posDesktopFolder = Directory(join(documentsDir.path, 'Pos_Desktop'));
+    final ownersFolder = join(posDesktopFolder.path, 'owners');
+    return join(ownersFolder, ownerName.toLowerCase());
+  }
+
+  // ======================================================
+  // GET STORE FOLDER PATH (Helper Method)
+  // ======================================================
+  Future<String> getStoreDbPath(String ownerName, String storeName) async {
+    final ownerFolder = await getOwnerFolderPath(ownerName);
+    final storesFolder = join(ownerFolder, 'stores');
+    final safeStoreName = storeName.toLowerCase().replaceAll(' ', '');
+    return join(storesFolder, '$safeStoreName.db');
+  }
+
+  Future<List<File>> getStoreDbFiles(String ownerName) async {
+    try {
+      final ownerFolder = await getOwnerFolderPath(ownerName);
+      final storesFolder = join(ownerFolder, 'stores');
+
+      final storesDir = Directory(storesFolder);
+      if (!storesDir.existsSync()) {
+        return [];
+      }
+
+      final files = storesDir.listSync();
+      final dbFiles = files
+          .where((file) => file is File && file.path.endsWith('.db'))
+          .cast<File>()
+          .toList();
+
+      return dbFiles;
+    } catch (e) {
+      _logger.e('❌ Error getting store DB files: $e');
+      return [];
+    }
+  }
+
+  // ======================================================
+  // STORE TABLES (Sync-ready) - UNCHANGED
   // ======================================================
   static Future<void> createStoreTables(Database db) async {
     await db.execute('''
@@ -384,16 +419,27 @@ class DatabaseHelper {
         email TEXT UNIQUE,
         password TEXT,
         contact TEXT,
-        activation_code TEXT,
         status TEXT DEFAULT 'pending',
         is_active INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        subscription_plan TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        subscription_plan_id INTEGER,
+        subscription_plan_name TEXT,
+        status TEXT DEFAULT 'active', -- active, inactive, expired, cancelled
         receipt_image TEXT,
         payment_date TEXT,
         subscription_amount REAL,
-        subscription_start_date TEXT,
-        subscription_end_date TEXT
+        subscription_start_date TEXT NOT NULL,
+        subscription_end_date TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES owners (id) ON DELETE CASCADE
       );
     ''');
 
@@ -420,14 +466,178 @@ class DatabaseHelper {
   ) async {
     _logger.i('🔄 Upgrading system DB $oldVersion → $newVersion');
     try {
-      if (oldVersion < 3) {
-        await db.execute(
-          'ALTER TABLE owners ADD COLUMN subscription_end_date TEXT;',
+      if (oldVersion < 4) {
+        // ✅ MIGRATION: Move subscription data to new table
+        _logger.i('🔄 Migrating to new subscription schema...');
+
+        final ownerColumns = await db.rawQuery('PRAGMA table_info(owners)');
+        final hasOldSubscriptionColumns = ownerColumns.any(
+          (col) => [
+            'subscription_plan',
+            'receipt_image',
+            'payment_date',
+            'subscription_amount',
+            'subscription_start_date',
+            'subscription_end_date',
+          ].contains(col['name']),
         );
-        _logger.i('✅ Added subscription_end_date to owners');
+
+        if (hasOldSubscriptionColumns) {
+          _logger.i('📦 Migrating existing subscription data...');
+
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              owner_id INTEGER NOT NULL,
+              subscription_plan_id INTEGER,
+              subscription_plan_name TEXT,
+              status TEXT DEFAULT 'active',
+              receipt_image TEXT,
+              payment_date TEXT,
+              subscription_amount REAL,
+              subscription_start_date TEXT NOT NULL,
+              subscription_end_date TEXT NOT NULL,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (owner_id) REFERENCES owners (id) ON DELETE CASCADE
+            );
+          ''');
+
+          await db.execute('''
+            INSERT INTO subscriptions (
+              owner_id, subscription_plan_name, receipt_image, payment_date, 
+              subscription_amount, subscription_start_date, subscription_end_date, status
+            )
+            SELECT 
+              id, 
+              subscription_plan, 
+              receipt_image, 
+              payment_date, 
+              subscription_amount, 
+              COALESCE(subscription_start_date, datetime('now')),
+              COALESCE(subscription_end_date, datetime('now', '+30 days')),
+              CASE 
+                WHEN subscription_end_date IS NULL OR subscription_end_date = '' THEN 'inactive'
+                WHEN date(subscription_end_date) >= date('now') THEN 'active'
+                ELSE 'expired'
+              END
+            FROM owners 
+            WHERE subscription_plan IS NOT NULL 
+              OR receipt_image IS NOT NULL 
+              OR payment_date IS NOT NULL
+              OR subscription_amount IS NOT NULL
+          ''');
+
+          _logger.i('✅ Subscription data migrated successfully');
+
+          // Create temporary table without subscription columns
+          await db.execute('''
+            CREATE TABLE owners_temp (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              super_admin_id INTEGER,
+              shop_name TEXT,
+              owner_name TEXT,
+              email TEXT UNIQUE,
+              password TEXT,
+              contact TEXT,
+              activation_code TEXT,
+              status TEXT DEFAULT 'pending',
+              is_active INTEGER DEFAULT 0,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+          ''');
+
+          await db.execute('''
+            INSERT INTO owners_temp (
+              id, super_admin_id, shop_name, owner_name, email, password, 
+              contact, activation_code, status, is_active, created_at
+            )
+            SELECT 
+              id, super_admin_id, shop_name, owner_name, email, password, 
+              contact, activation_code, status, is_active, created_at
+            FROM owners
+          ''');
+
+          await db.execute('DROP TABLE owners');
+          await db.execute('ALTER TABLE owners_temp RENAME TO owners');
+
+          _logger.i('✅ Owners table cleaned up successfully');
+        } else {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              owner_id INTEGER NOT NULL,
+              subscription_plan_id INTEGER,
+              subscription_plan_name TEXT,
+              status TEXT DEFAULT 'active',
+              receipt_image TEXT,
+              payment_date TEXT,
+              subscription_amount REAL,
+              subscription_start_date TEXT NOT NULL,
+              subscription_end_date TEXT NOT NULL,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (owner_id) REFERENCES owners (id) ON DELETE CASCADE
+            );
+          ''');
+        }
+
+        _logger.i(
+          '✅ Successfully upgraded to version 4 with subscriptions table',
+        );
+      }
+
+      if (oldVersion < 5) {
+        // ✅ MIGRATION: Remove activation_code column completely
+        _logger.i('🔄 Removing activation_code column...');
+
+        final ownerColumns = await db.rawQuery('PRAGMA table_info(owners)');
+        final hasActivationCode = ownerColumns.any(
+          (col) => col['name'] == 'activation_code',
+        );
+
+        if (hasActivationCode) {
+          await db.execute('''
+            CREATE TABLE owners_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              super_admin_id INTEGER,
+              shop_name TEXT,
+              owner_name TEXT,
+              email TEXT UNIQUE,
+              password TEXT,
+              contact TEXT,
+              status TEXT DEFAULT 'pending',
+              is_active INTEGER DEFAULT 0,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+          ''');
+
+          await db.execute('''
+            INSERT INTO owners_new (
+              id, super_admin_id, shop_name, owner_name, email, password, 
+              contact, status, is_active, created_at
+            )
+            SELECT 
+              id, super_admin_id, shop_name, owner_name, email, password, 
+              contact, status, is_active, created_at
+            FROM owners
+          ''');
+
+          await db.execute('DROP TABLE owners');
+          await db.execute('ALTER TABLE owners_new RENAME TO owners');
+
+          _logger.i('✅ Activation code removed successfully');
+        } else {
+          _logger.i('✅ Activation code column already removed');
+        }
+
+        _logger.i(
+          '✅ Successfully upgraded to version 5 without activation code',
+        );
       }
     } catch (e) {
       _logger.e('❌ Database upgrade failed: $e');
+      rethrow;
     }
   }
 
@@ -446,6 +656,28 @@ class DatabaseHelper {
       'sync_metadata',
     ];
     print('🔎 === STORE DB SCHEMA ===');
+    for (final t in tables) {
+      try {
+        final info = await db.rawQuery('PRAGMA table_info($t)');
+        print('📋 $t:');
+        for (final c in info) {
+          print('   - ${c['name']} | ${c['type']}');
+        }
+      } catch (_) {
+        print('   (not found)');
+      }
+    }
+    print('==========================');
+  }
+
+  Future<void> debugSystemSchema(Database db) async {
+    final tables = [
+      'super_admin',
+      'owners',
+      'subscriptions',
+      'subscription_plans',
+    ];
+    print('🔎 === SYSTEM DB SCHEMA ===');
     for (final t in tables) {
       try {
         final info = await db.rawQuery('PRAGMA table_info($t)');

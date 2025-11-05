@@ -6,7 +6,7 @@ import 'package:pos_desktop/presentation/widgets/app_loader.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_input.dart';
 import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/subscription_management_controller.dart';
+import 'package:pos_desktop/presentation/state_management/controllers/subscription_plan_management_controller.dart';
 import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 
@@ -20,7 +20,7 @@ class SubscriptionManagementScreen extends StatefulWidget {
 
 class _SubscriptionManagementScreenState
     extends State<SubscriptionManagementScreen> {
-  late final SubscriptionManagementController _controller;
+  late final SubscriptionPlanManagementController _controller;
   bool _isControllerReady = false;
 
   @override
@@ -31,9 +31,9 @@ class _SubscriptionManagementScreenState
 
   Future<void> _initController() async {
     final db = await DatabaseHelper().database;
-    _controller = SubscriptionManagementController(
-      SubscriptionPlanDao(db),
-      context,
+    _controller = SubscriptionPlanManagementController(
+      dao: SubscriptionPlanDao(db),
+      context: context,
     );
     await _controller.loadPlans();
     if (mounted) {
@@ -41,9 +41,7 @@ class _SubscriptionManagementScreenState
     }
   }
 
-  void _addPlan() {
-    _showAddPlanDialog();
-  }
+  void _addPlan() => _showAddPlanDialog();
 
   void _showAddPlanDialog() {
     final formKey = GlobalKey<FormState>();
@@ -71,12 +69,8 @@ class _SubscriptionManagementScreenState
                   controller: nameController,
                   hint: "Plan Name",
                   icon: Icons.business_center_rounded,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Plan name is required';
-                    }
-                    return null;
-                  },
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'Plan name is required' : null,
                 ),
                 const SizedBox(height: 16),
                 AppInput(
@@ -84,13 +78,9 @@ class _SubscriptionManagementScreenState
                   hint: "Price (\$)",
                   icon: Icons.attach_money_rounded,
                   type: InputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Price is required';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Enter valid price';
-                    }
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Price is required';
+                    if (double.tryParse(v) == null) return 'Enter valid price';
                     return null;
                   },
                 ),
@@ -100,13 +90,9 @@ class _SubscriptionManagementScreenState
                   hint: "Duration (days)",
                   icon: Icons.calendar_today_rounded,
                   type: InputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Duration is required';
-                    }
-                    if (int.tryParse(value) == null) {
-                      return 'Enter valid duration';
-                    }
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Duration required';
+                    if (int.tryParse(v) == null) return 'Enter valid number';
                     return null;
                   },
                 ),
@@ -188,7 +174,7 @@ class _SubscriptionManagementScreenState
     required int maxCategories,
     required String features,
   }) {
-    final newPlan = SubscriptionPlanEntity(
+    final plan = SubscriptionPlanEntity(
       id: DateTime.now().millisecondsSinceEpoch,
       name: name,
       price: price,
@@ -198,17 +184,15 @@ class _SubscriptionManagementScreenState
       maxProducts: maxProducts,
       maxCategories: maxCategories,
     );
-
-    _controller.addPlan(newPlan);
+    _controller.addPlan(plan);
   }
 
   List<String> _parseFeatures(String featuresText) {
     if (featuresText.isEmpty) return ['Basic Features'];
-
     return featuresText
         .split(',')
-        .map((feature) => feature.trim())
-        .where((feature) => feature.isNotEmpty)
+        .map((f) => f.trim())
+        .where((f) => f.isNotEmpty)
         .toList();
   }
 
@@ -252,29 +236,15 @@ class _SubscriptionManagementScreenState
                   controller: nameController,
                   hint: "Plan Name",
                   icon: Icons.business_center_rounded,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Plan name is required';
-                    }
-                    return null;
-                  },
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'Plan name is required' : null,
                 ),
                 const SizedBox(height: 16),
-                // ... same fields as add dialog
                 AppInput(
                   controller: priceController,
                   hint: "Price (\$)",
                   icon: Icons.attach_money_rounded,
                   type: InputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Price is required';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Enter valid price';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 16),
                 AppInput(
@@ -282,15 +252,6 @@ class _SubscriptionManagementScreenState
                   hint: "Duration (days)",
                   icon: Icons.calendar_today_rounded,
                   type: InputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Duration is required';
-                    }
-                    if (int.tryParse(value) == null) {
-                      return 'Enter valid duration';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 16),
                 Row(

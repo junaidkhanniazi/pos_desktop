@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:pos_desktop/core/errors/exception_handler.dart';
 import 'package:pos_desktop/core/errors/failure.dart';
@@ -56,11 +57,12 @@ class OwnerDao {
     }
   }
 
-  // 🔹 Activate owner (approve + generate code)
+  // 🔹 Activate owner (approve + create master DB & store)
   Future<void> activateOwner(
     int ownerId,
     int superAdminId,
     int durationDays,
+    BuildContext context,
   ) async {
     try {
       final db = await _dbHelper.database;
@@ -68,16 +70,13 @@ class OwnerDao {
       final endDate = now.add(Duration(days: durationDays));
 
       await _dbHelper.executeWithRetry(() async {
-        // 1. Pehle owner ko activate karen
+        // 1️⃣ Pehle owner ko activate karo (no subscription columns here!)
         final count = await db.update(
           'owners',
           {
-            'status': 'approved',
+            'status': 'approved', // ya 'active', depending on your enum
             'is_active': 1,
             'super_admin_id': superAdminId,
-            'subscription_start_date': now.toIso8601String(),
-            'subscription_end_date': endDate.toIso8601String(),
-            'activation_code': _generateActivationCode(),
           },
           where: 'id = ?',
           whereArgs: [ownerId],
@@ -87,31 +86,45 @@ class OwnerDao {
           throw DatabaseFailure('Owner not found with id=$ownerId');
         }
 
-        _logger.i(
-          '✅ Owner activated (id=$ownerId) - Subscription: $now to $endDate ($durationDays days)',
+        _logger.i('✅ Owner activated (id=$ownerId)');
+
+        // 2️⃣ Subscription table mein update karo
+        await db.update(
+          'subscriptions',
+          {
+            'status': 'active',
+            'subscription_start_date': now.toIso8601String(),
+            'subscription_end_date': endDate.toIso8601String(),
+          },
+          where: 'owner_id = ?',
+          whereArgs: [ownerId],
         );
 
-        // ✅ NEW: AUTOMATICALLY CREATE MASTER DB & DEFAULT STORE
+        _logger.i(
+          '📅 Subscription activated for owner_id=$ownerId: $now → $endDate ($durationDays days)',
+        );
+
+        // 3️⃣ Automatically create Master DB & Default Store
         final owner = await getOwnerById(ownerId);
         if (owner != null) {
           try {
-            // Owner name derive karen (email se agar ownerName field nahi hai)
             final ownerName = _getOwnerName(owner);
 
-            // Master DB create karen
             await _dbHelper.openMasterDB(ownerId, ownerName);
             _logger.i('✅ Master DB created for $ownerName');
 
-            // Default store create karen
-            await _dbHelper.openStoreDB(ownerId, ownerName, 1, 'Main Store');
-            _logger.i('✅ Default store created for $ownerName');
+            await _storeDao.createStore(
+              ownerId: ownerId,
+              ownerName: ownerName,
+              storeName: owner.shopName,
+              context: context,
+            );
 
             _logger.i('🎉 Automatic store setup completed for $ownerName');
           } catch (storeError) {
             _logger.e(
               '⚠️ Store creation failed but owner activated: $storeError',
             );
-            // Store creation fail hone par bhi owner activated rahega
           }
         }
       });
@@ -169,20 +182,16 @@ class OwnerDao {
     }
   }
 
-  // 🔹 Owner login verification
+  // 🔹 Owner login verification (ACTIVATION CODE REMOVED)
   Future<OwnerModel?> getOwnerByCredentials(
     String email,
-    String password, {
-    String? activationCode,
-  }) async {
+    String password,
+  ) async {
     try {
       final db = await _dbHelper.database;
-      final where = activationCode != null
-          ? 'email = ? AND password = ? AND activation_code = ? AND status = ? AND is_active = 1'
-          : 'email = ? AND password = ? AND status = ? AND is_active = 1';
-      final args = activationCode != null
-          ? [email, password, activationCode, 'approved']
-          : [email, password, 'approved'];
+      final where =
+          'email = ? AND password = ? AND status = ? AND is_active = 1';
+      final args = [email, password, 'approved'];
 
       final result = await db.query(
         'owners',
@@ -196,19 +205,19 @@ class OwnerDao {
       final owner = OwnerModel.fromMap(result.first);
 
       // ✅ CHECK SUBSCRIPTION EXPIRY
-      if (owner.isSubscriptionExpired) {
-        throw Exception('Your subscription has expired. Please renew.');
-      }
+      // if (owner.isSubscriptionExpired) {
+      //   throw Exception('Your subscription has expired. Please renew.');
+      // }
 
-      // ✅ CHECK IF SUBSCRIPTION IS EXPIRING SOON (7 days or less)
-      if (owner.isSubscriptionExpiringSoon) {
-        final daysLeft = DateTime.parse(
-          owner.subscriptionEndDate!,
-        ).difference(DateTime.now()).inDays;
-        _logger.w(
-          '⚠️ Subscription expiring soon for ${owner.email} - $daysLeft days left',
-        );
-      }
+      // // ✅ CHECK IF SUBSCRIPTION IS EXPIRING SOON (7 days or less)
+      // if (owner.isSubscriptionExpiringSoon) {
+      //   final daysLeft = DateTime.parse(
+      //     owner.subscriptionEndDate!,
+      //   ).difference(DateTime.now()).inDays;
+      //   _logger.w(
+      //     '⚠️ Subscription expiring soon for ${owner.email} - $daysLeft days left',
+      //   );
+      // }
 
       _logger.i('✅ Owner login successful: ${owner.email}');
       return owner;
@@ -472,61 +481,6 @@ class OwnerDao {
     }
   }
 
-  // 🔹 Generate activation code
-  String _generateActivationCode() {
-    final rng = Random();
-    return (rng.nextInt(900000) + 100000).toString();
-  }
-
-  // 🔹 TEST METHODS
-
-  // TEMPORARY: For testing expired subscription
-
-  // Future<void> createTestExpiredOwner() async {
-  //   try {
-  //     final db = await _dbHelper.database;
-  //     final expiredOwner = {
-  //       'name': 'Test Expired Owner',
-  //       'email': 'expired@test.com',
-  //       'password': 'password',
-  //       'contact': '1234567890',
-  //       'status': 'approved',
-  //       'is_active': 1,
-  //       'activation_code': '999999',
-  //       'created_at': DateTime.now().toIso8601String(),
-  //       'subscription_plan_id': 1761893834219, // basic plan ID
-  //       'subscription_start_date': DateTime(2024, 10, 1).toIso8601String(),
-  //       'subscription_end_date': DateTime.now()
-  //           .subtract(Duration(days: 1))
-  //           .toIso8601String(),
-  //     };
-
-  //     await db.insert('owners', expiredOwner);
-  //     print('✅ Test expired owner created: expired@test.com');
-  //   } catch (e) {
-  //     print('❌ Error creating test expired owner: $e');
-  //   }
-  // }
-
-  Future<void> expireOwnerNow(int ownerId) async {
-    try {
-      final db = await _dbHelper.database;
-      await db.update(
-        'owners',
-        {
-          'subscription_end_date': DateTime.now()
-              .subtract(Duration(days: 1))
-              .toIso8601String(),
-        },
-        where: 'id = ?',
-        whereArgs: [ownerId],
-      );
-      print('✅ Made owner $ownerId subscription expired');
-    } catch (e) {
-      print('❌ Error expiring owner: $e');
-    }
-  }
-
   // ✅ NEW: Renew subscription
   Future<void> renewSubscription({
     required int ownerId,
@@ -562,6 +516,27 @@ class OwnerDao {
     } catch (e) {
       _logger.e('❌ renewSubscription error: $e');
       throw ExceptionHandler.handle(e);
+    }
+  }
+
+  // 🔹 TEST METHODS
+
+  Future<void> expireOwnerNow(int ownerId) async {
+    try {
+      final db = await _dbHelper.database;
+      await db.update(
+        'owners',
+        {
+          'subscription_end_date': DateTime.now()
+              .subtract(Duration(days: 1))
+              .toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [ownerId],
+      );
+      print('✅ Made owner $ownerId subscription expired');
+    } catch (e) {
+      print('❌ Error expiring owner: $e');
     }
   }
 }

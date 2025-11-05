@@ -1,29 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/widgets/app_button.dart';
-import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/subscription_management_controller.dart';
-import 'package:pos_desktop/data/local/database/database_helper.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
+import 'package:pos_desktop/data/local/database/database_helper.dart';
+import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
+import 'package:pos_desktop/presentation/widgets/app_button.dart';
 
 class SubscriptionPlansScreen extends StatefulWidget {
-  final String shopName;
-  final String ownerName;
-  final String email;
-  final String password;
-  final String contact; // ✅ CHANGED: from String? to String
-
-  const SubscriptionPlansScreen({
-    super.key,
-    required this.shopName,
-    required this.ownerName,
-    required this.email,
-    required this.password,
-    required this.contact, // ✅ CHANGED: from optional to required
-  });
+  const SubscriptionPlansScreen({super.key}); // ✅ Remove required ownerId
 
   @override
   State<SubscriptionPlansScreen> createState() =>
@@ -31,68 +17,51 @@ class SubscriptionPlansScreen extends StatefulWidget {
 }
 
 class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
-  late final SubscriptionManagementController controller;
-  bool _isControllerInitialized = false;
-  SubscriptionPlanEntity? _selectedPlan; // ✅ MOVE TO STATE LEVEL
+  bool isLoading = true;
+  List<SubscriptionPlanEntity> plans = [];
+  SubscriptionPlanEntity? selectedPlan;
+  Map<String, dynamic>? tempOwnerData; // ✅ Store temp data here
 
   @override
   void initState() {
     super.initState();
-    _initializeController();
+    _loadData();
   }
 
-  Future<void> _initializeController() async {
+  Future<void> _loadData() async {
     try {
+      // ✅ Load temporary owner data
+      tempOwnerData = await AuthStorageHelper.getTempOwnerData();
+      print('📋 Loaded temp owner data: $tempOwnerData');
+
+      // Load subscription plans
       final dbHelper = DatabaseHelper();
-      final database = await dbHelper.database;
-      final subscriptionPlanDao = SubscriptionPlanDao(database);
-
-      // Create controller instance
-      controller = SubscriptionManagementController(
-        subscriptionPlanDao,
-        context,
-      );
-
-      // Manually call onInit since we're not using Get.put
-      controller.onInit();
+      final db = await dbHelper.database;
+      final dao = SubscriptionPlanDao(db);
+      final allPlans = await dao.getAllActivePlans();
 
       setState(() {
-        _isControllerInitialized = true;
+        plans = allPlans;
+        isLoading = false;
       });
-
-      print('✅ Controller initialized successfully');
-      print('📊 Plans count: ${controller.plans.length}');
     } catch (e) {
-      print('❌ Error initializing controller: $e');
+      print('❌ Error loading data: $e');
+      setState(() => isLoading = false);
     }
   }
 
-  void _onPlanSelected(SubscriptionPlanEntity plan) {
-    setState(() {
-      _selectedPlan = plan;
-    });
-    print('✅ Plan selected: ${plan.name}');
+  void _selectPlan(SubscriptionPlanEntity plan) {
+    setState(() => selectedPlan = plan);
   }
 
-  void _proceedToPayment() {
-    if (_selectedPlan == null) {
-      print('❌ No plan selected');
-      return;
-    }
+  void _goToPayment() {
+    if (selectedPlan == null) return;
 
-    print('🚀 Proceeding to payment with plan: ${_selectedPlan!.name}');
-
+    // ✅ Only pass the selected plan, owner data comes from temp storage
     Navigator.pushNamed(
       context,
       AppRoutes.payment,
-      arguments: {
-        'shopName': widget.shopName,
-        'ownerName': widget.ownerName,
-        'email': widget.email,
-        'password': widget.password,
-        'contact': widget.contact,
-        'selectedPlan': _selectedPlan!,
-      },
+      arguments: {'selectedPlan': selectedPlan!},
     );
   }
 
@@ -110,7 +79,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         title: Text("Choose Your Plan", style: AppText.h2),
         centerTitle: true,
       ),
-      body: !_isControllerInitialized
+      body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
@@ -123,207 +92,158 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "All plans include 30-day access. Choose the one that fits your business needs.",
+                    "Each plan offers unique features tailored to your business size.",
                     style: AppText.small.copyWith(color: AppColors.textLight),
                   ),
                   const SizedBox(height: 32),
 
-                  // Expanded grid for plans
-                  Expanded(
-                    child: Obx(() {
-                      print(
-                        '🔄 Obx rebuilding, isLoading: ${controller.isLoading.value}',
-                      );
-                      print(
-                        '📦 Plans count in Obx: ${controller.plans.length}',
-                      );
-                      print('🎯 Selected plan: ${_selectedPlan?.name}');
-
-                      if (controller.isLoading.value) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final plans = controller.plans;
-                      if (plans.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "No subscription plans available",
-                                style: AppText.body.copyWith(
-                                  color: AppColors.textLight,
+                  // Show owner info if available
+                  if (tempOwnerData != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person, color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Store: ${tempOwnerData!['shopName'] ?? 'N/A'}",
+                                  style: AppText.body.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
+                                Text(
+                                  "Owner: ${tempOwnerData!['ownerName'] ?? 'N/A'}",
+                                  style: AppText.small.copyWith(
+                                    color: AppColors.textLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Grid for plans
+                  Expanded(
+                    child: GridView.builder(
+                      itemCount: plans.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 24,
+                            crossAxisSpacing: 24,
+                            childAspectRatio: 0.75,
+                          ),
+                      itemBuilder: (context, index) {
+                        final plan = plans[index];
+                        final isSelected = selectedPlan?.id == plan.id;
+
+                        return GestureDetector(
+                          onTap: () => _selectPlan(plan),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.border,
+                                width: isSelected ? 2 : 1,
                               ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: () => controller.loadPlans(),
-                                child: const Text('Retry'),
-                              ),
-                            ],
+                              boxShadow: [
+                                if (isSelected)
+                                  BoxShadow(
+                                    color: AppColors.primary.withOpacity(0.15),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  plan.name,
+                                  style: AppText.h2.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Rs. ${plan.price.toStringAsFixed(0)} / ${plan.durationDays} days",
+                                  style: AppText.body.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: plan.features.length,
+                                    itemBuilder: (context, i) => Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(
+                                          Icons.check,
+                                          color: AppColors.success,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            plan.features[i],
+                                            style: AppText.small.copyWith(
+                                              color: AppColors.textMedium,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                AppButton(
+                                  label: isSelected
+                                      ? "Selected"
+                                      : "Select Plan",
+                                  width: double.infinity,
+                                  isPrimary: isSelected,
+                                  onPressed: () => _selectPlan(plan),
+                                ),
+                              ],
+                            ),
                           ),
                         );
-                      }
-
-                      return GridView.builder(
-                        itemCount: plans.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 24,
-                              crossAxisSpacing: 24,
-                              childAspectRatio: 0.72,
-                            ),
-                        itemBuilder: (context, index) {
-                          final plan = plans[index];
-                          return _PlanCard(
-                            plan: plan,
-                            isSelected: _selectedPlan == plan,
-                            onSelected: () => _onPlanSelected(plan),
-                          );
-                        },
-                      );
-                    }),
+                      },
+                    ),
                   ),
 
                   const SizedBox(height: 24),
                   AppButton(
                     label: "Continue to Payment",
                     width: double.infinity,
-                    onPressed: _selectedPlan != null ? _proceedToPayment : null,
-                    isDisabled: _selectedPlan == null,
+                    isDisabled: selectedPlan == null,
+                    onPressed: selectedPlan != null ? _goToPayment : null,
                   ),
                 ],
               ),
             ),
-    );
-  }
-}
-
-class _PlanCard extends StatefulWidget {
-  final SubscriptionPlanEntity plan;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  const _PlanCard({
-    required this.plan,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  @override
-  State<_PlanCard> createState() => _PlanCardState();
-}
-
-class _PlanCardState extends State<_PlanCard> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final plan = widget.plan;
-    final isSelected = widget.isSelected;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: GestureDetector(
-        onTap: () {
-          print('🎯 Card tapped: ${plan.name}');
-          widget.onSelected();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.primary
-                  : _hovering
-                  ? AppColors.primary.withOpacity(0.3)
-                  : AppColors.border,
-              width: isSelected ? 2 : 1,
-            ),
-            boxShadow: [
-              if (isSelected || _hovering)
-                BoxShadow(
-                  color: AppColors.primary.withOpacity(0.15),
-                  blurRadius: 18,
-                  offset: const Offset(0, 4),
-                )
-              else
-                BoxShadow(
-                  color: AppColors.shadow.withOpacity(0.08),
-                  blurRadius: 10,
-                ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              Text(
-                plan.name,
-                style: AppText.h2.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "Rs. ${plan.price.toStringAsFixed(0)}",
-                style: AppText.h1.copyWith(color: AppColors.primary),
-              ),
-              Text(
-                "per ${plan.durationDays} days",
-                style: AppText.small.copyWith(color: AppColors.textLight),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: plan.features.length,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.success,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              plan.features[index],
-                              style: AppText.small.copyWith(
-                                color: AppColors.textMedium,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              AppButton(
-                label: isSelected ? "Selected" : "Select Plan",
-                width: double.infinity,
-                isPrimary: isSelected,
-                onPressed: () {
-                  print('🎯 Button pressed: ${plan.name}');
-                  widget.onSelected();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

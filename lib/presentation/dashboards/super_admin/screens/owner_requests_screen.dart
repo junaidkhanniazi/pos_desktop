@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
+import 'package:pos_desktop/domain/entities/subscription_entity.dart';
 import 'package:pos_desktop/presentation/state_management/controllers/owner_requests_controller.dart';
 import 'package:pos_desktop/presentation/widgets/app_loader.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
@@ -15,19 +16,34 @@ class OwnerRequestsScreen extends StatelessWidget {
   final OwnerRequestsController controller = Get.put(OwnerRequestsController());
 
   // ✅ Activation Code Dialog
-  void _showActivationDialog(BuildContext context, String name, String code) {
+  void _showApprovalDialog(
+    BuildContext context,
+    String name,
+    String? planName,
+  ) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Activation Code Generated", style: AppText.h2),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.verified_rounded,
+              color: AppColors.success,
+              size: 30,
+            ),
+            const SizedBox(width: 8),
+            Text("Owner Approved", style: AppText.h2),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               "Owner '$name' has been approved successfully!",
               style: AppText.body.copyWith(color: AppColors.textMedium),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Container(
@@ -37,17 +53,26 @@ class OwnerRequestsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.primary.withOpacity(0.2)),
               ),
-              child: Text(
-                code,
-                style: AppText.h2.copyWith(
-                  color: AppColors.primary,
-                  letterSpacing: 1,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    "Subscription Activated",
+                    style: AppText.h2.copyWith(
+                      color: AppColors.primary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Plan: ${planName ?? 'N/A'}",
+                    style: AppText.small.copyWith(color: AppColors.textMedium),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              "Share this code with the owner to activate their account",
+              "Store access has been enabled for the owner.",
               style: AppText.small.copyWith(color: AppColors.textLight),
               textAlign: TextAlign.center,
             ),
@@ -203,33 +228,59 @@ class OwnerRequestsScreen extends StatelessWidget {
                         DataCell(Text(owner.email, style: AppText.body)),
                         DataCell(Text(owner.storeName, style: AppText.body)),
                         DataCell(
-                          Text(
-                            owner.subscriptionPlan ?? "No Plan",
-                            style: AppText.small,
+                          FutureBuilder<SubscriptionEntity?>(
+                            future: controller.getOwnerSubscription(owner.id),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return Text("Loading...", style: AppText.small);
+                              }
+                              final subscription = snapshot.data;
+                              return Text(
+                                subscription?.subscriptionPlanName ?? "No Plan",
+                                style: AppText.small,
+                              );
+                            },
                           ),
                         ),
                         DataCell(
-                          owner.hasReceipt
-                              ? TextButton.icon(
-                                  icon: const Icon(
-                                    Icons.visibility,
-                                    color: AppColors.primary,
-                                  ),
-                                  label: const Text(
-                                    "View",
-                                    style: TextStyle(color: AppColors.primary),
-                                  ),
-                                  onPressed: () => _showReceiptPreview(
-                                    context,
-                                    owner.receiptImage!,
-                                  ),
-                                )
-                              : Text(
-                                  "N/A",
-                                  style: AppText.small.copyWith(
-                                    color: AppColors.textLight,
-                                  ),
-                                ),
+                          FutureBuilder<SubscriptionEntity?>(
+                            future: controller.getOwnerSubscription(owner.id),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return Text("Loading...", style: AppText.small);
+                              }
+                              final subscription = snapshot.data;
+                              final hasReceipt =
+                                  subscription?.receiptImage != null &&
+                                  subscription!.receiptImage!.isNotEmpty;
+
+                              return hasReceipt
+                                  ? TextButton.icon(
+                                      icon: Icon(
+                                        Icons.visibility,
+                                        color: AppColors.primary,
+                                      ),
+                                      label: Text(
+                                        "View",
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      onPressed: () => _showReceiptPreview(
+                                        context,
+                                        subscription!.receiptImage!,
+                                      ),
+                                    )
+                                  : Text(
+                                      "N/A",
+                                      style: AppText.small.copyWith(
+                                        color: AppColors.textLight,
+                                      ),
+                                    );
+                            },
+                          ),
                         ),
                         DataCell(
                           Text(
@@ -250,25 +301,88 @@ class OwnerRequestsScreen extends StatelessWidget {
                                   ),
                                   tooltip: "Approve",
                                   onPressed: () async {
+                                    // 🔹 Step 1: Show confirmation dialog BEFORE approving
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AlertDialog(
+                                        backgroundColor: AppColors.surface,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.help_outline_rounded,
+                                              color: AppColors.primary,
+                                              size: 28,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              "Confirm Approval",
+                                              style: AppText.h2,
+                                            ),
+                                          ],
+                                        ),
+                                        content: Text(
+                                          "Are you sure you want to approve '${owner.name}'?\n\n"
+                                          "This will activate their subscription and store access.",
+                                          style: AppText.body.copyWith(
+                                            color: AppColors.textMedium,
+                                          ),
+                                        ),
+                                        actions: [
+                                          AppButton(
+                                            label: "Cancel",
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                          ),
+                                          AppButton(
+                                            label: "Approve",
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    // 🔹 Step 2: If admin cancels, do nothing
+                                    if (confirm != true) return;
+
+                                    // 🔹 Step 3: Show toast while approving
+                                    AppToast.show(
+                                      context,
+                                      message:
+                                          "Approving owner, please wait...",
+                                      type: ToastType.info,
+                                    );
+
+                                    // 🔹 Step 4: Call controller method
                                     final updatedOwner = await controller
-                                        .approveOwner(owner);
-                                    if (updatedOwner != null &&
-                                        updatedOwner.activationCode != null) {
-                                      _showActivationDialog(
-                                        context,
-                                        updatedOwner.name,
-                                        updatedOwner.activationCode!,
-                                      );
+                                        .approveOwner(owner, context);
+
+                                    // 🔹 Step 5: Handle result
+                                    if (updatedOwner != null) {
                                       AppToast.show(
                                         context,
                                         message: "Owner approved successfully!",
                                         type: ToastType.success,
                                       );
+
+                                      // Optional: show final success dialog
+                                      // _showApprovalDialog(
+                                      //   context,
+                                      //   owner.name,
+                                      //   owner.subscriptionPlan,
+                                      // );
+
+                                      await controller.loadPendingOwners();
                                     } else {
                                       AppToast.show(
                                         context,
                                         message:
-                                            "Failed to approve owner or missing code.",
+                                            "Failed to approve owner. Please try again.",
                                         type: ToastType.error,
                                       );
                                     }

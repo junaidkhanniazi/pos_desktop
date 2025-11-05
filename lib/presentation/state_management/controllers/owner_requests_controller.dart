@@ -1,7 +1,9 @@
 // presentation/state_management/controllers/owner_requests_controller.dart
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/domain/entities/owner_entity.dart';
+import 'package:pos_desktop/domain/entities/subscription_entity.dart';
 import 'package:pos_desktop/domain/repositories/owner_repository.dart';
 import 'package:pos_desktop/domain/repositories/repositories_impl/owner_repository_impl.dart';
 
@@ -17,15 +19,15 @@ class OwnerRequestsController extends GetxController {
     loadPendingOwners();
   }
 
-  Future<void> loadPendingOwners() async {
-    try {
-      isLoading.value = true;
-      final owners = await repo.getPendingOwners();
-      pendingOwners.value = owners;
-    } finally {
-      isLoading.value = false;
-    }
-  }
+  // Future<void> loadPendingOwners() async {
+  //   try {
+  //     isLoading.value = true;
+  //     final owners = await repo.getPendingOwners();
+  //     pendingOwners.value = owners;
+  //   } finally {
+  //     isLoading.value = false;
+  //   }
+  // }
 
   /// 🔹 Get subscription duration from database - FIXED VERSION
   Future<int> _getSubscriptionDuration(OwnerEntity owner) async {
@@ -73,7 +75,10 @@ class OwnerRequestsController extends GetxController {
   }
 
   /// 🔹 Approve owner with REAL data - UPDATED to use the fixed method
-  Future<OwnerEntity?> approveOwner(OwnerEntity owner) async {
+  Future<OwnerEntity?> approveOwner(
+    OwnerEntity owner,
+    BuildContext context,
+  ) async {
     try {
       print("🔄 Approving owner id=${owner.id}...");
 
@@ -84,6 +89,7 @@ class OwnerRequestsController extends GetxController {
         owner.id.toString(),
         await _getCurrentAdminId(),
         durationDays, // ✅ Now using actual plan duration
+        context,
       );
       print("✅ Owner activated in DB (id=${owner.id}) with $durationDays days");
 
@@ -97,7 +103,6 @@ class OwnerRequestsController extends GetxController {
       final updatedOwner = await _getUpdatedOwner(owner.id);
 
       if (updatedOwner != null) {
-        print("🎯 Actual activation code: ${updatedOwner.activationCode}");
         return updatedOwner;
       } else {
         print("❌ Could not fetch updated owner data");
@@ -143,6 +148,68 @@ class OwnerRequestsController extends GetxController {
       throw Exception("Admin ID not found. Please login again.");
     }
     return adminId;
+  }
+
+  // In owner_requests_controller.dart
+  Future<void> loadPendingOwners() async {
+    try {
+      isLoading.value = true;
+      final owners = await repo.getPendingOwners();
+
+      // ✅ Get subscription data for each owner separately
+      final ownersWithSubscriptions = await Future.wait(
+        owners.map((owner) async {
+          try {
+            // ✅ FIXED: Call getOwnerSubscription on repo, not on controller
+            final subscription = await repo.getOwnerSubscription(owner.id);
+
+            if (subscription != null) {
+              // Return owner with subscription data (without modifying OwnerEntity)
+              return owner.copyWith(
+                subscriptionPlan: subscription.subscriptionPlanName,
+                subscriptionAmount: subscription.subscriptionAmount,
+                paymentDate: subscription.paymentDate,
+                receiptImage: subscription.receiptImage,
+                subscriptionStartDate: subscription.subscriptionStartDate,
+                subscriptionEndDate: subscription.subscriptionEndDate,
+              );
+            }
+          } catch (e) {
+            print('❌ Error fetching subscription for owner ${owner.id}: $e');
+          }
+          return owner; // Return original if no subscription found
+        }),
+      );
+
+      // Debug print
+      print(
+        '🔍 Loaded ${ownersWithSubscriptions.length} owners with subscriptions:',
+      );
+      for (final owner in ownersWithSubscriptions) {
+        print('   👤 ${owner.name} (${owner.email})');
+        print('      Store: ${owner.storeName}');
+        print(
+          '      Subscription Plan: ${owner.subscriptionPlan ?? "No Plan"}',
+        );
+        print('      Receipt: ${owner.receiptImage ?? "N/A"}');
+        print('   ---');
+      }
+
+      pendingOwners.value = ownersWithSubscriptions;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  /// 🔹 Fetch a specific owner's subscription
+  Future<SubscriptionEntity?> getOwnerSubscription(String ownerId) async {
+    try {
+      final subscription = await repo.getOwnerSubscription(ownerId);
+      return subscription;
+    } catch (e) {
+      print("❌ Error fetching subscription for owner $ownerId: $e");
+      return null;
+    }
   }
 
   /// 🔹 Reject owner with delay

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
+import 'package:pos_desktop/data/local/dao/owner_dao.dart';
+import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/domain/repositories/repositories_impl/owner_repository_impl.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_input.dart';
-import 'package:pos_desktop/data/local/dao/owner_dao.dart';
 import 'package:pos_desktop/presentation/state_management/owner/owner_signup_controller.dart';
 
 class OwnerSignupScreen extends StatefulWidget {
@@ -17,7 +19,7 @@ class OwnerSignupScreen extends StatefulWidget {
 
 class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
   late final OwnerSignupController controller;
-  final bool _isLoading = false;
+  bool _isLoading = false; // make it mutable so we can toggle loading
 
   @override
   void initState() {
@@ -132,24 +134,50 @@ class _OwnerSignupScreenState extends State<OwnerSignupScreen> {
                         label: 'Create My Store',
                         width: double.infinity,
                         onPressed: () async {
-                          if (!controller.formKey.currentState!.validate()) {
+                          if (!controller.formKey.currentState!.validate())
                             return;
-                          }
 
-                          // Navigate to subscription screen with form data
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.subscriptionPlans,
-                            arguments: {
-                              'shopName': controller.shopName.text.trim(),
-                              'ownerName': controller.ownerName.text.trim(),
-                              'email': controller.email.text.trim(),
-                              'password': controller.password.text.trim(),
-                              'contact': controller.contact.text.trim(),
-                            },
+                          setState(() => _isLoading = true);
+                          await controller.signup(context);
+                          setState(() => _isLoading = false);
+
+                          // ✅ Fetch latest owner ID directly from DB
+                          final db = await DatabaseHelper().database;
+                          final result = await db.rawQuery(
+                            'SELECT id FROM owners ORDER BY id DESC LIMIT 1',
                           );
+                          final ownerId = result.isNotEmpty
+                              ? result.first['id'] as int
+                              : 0;
+
+                          // ✅ Combine form data
+                          final formData = controller.getFormData();
+                          formData['ownerId'] = ownerId.toString();
+
+                          print('=============================');
+                          print('🧾 Owner Signup Form Data');
+                          print('=============================');
+                          formData.forEach((key, value) {
+                            print('➡️ $key: $value');
+                          });
+                          print('=============================');
+
+                          // ✅ Save temporarily
+                          await AuthStorageHelper.saveTempOwnerData(formData);
+                          print(
+                            '✅ Temporary owner data saved with ID: $ownerId',
+                          );
+                          controller.clearForm();
+
+                          if (context.mounted) {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.subscriptionPlans,
+                            );
+                          }
                         },
                       ),
+
                 const SizedBox(height: 16),
 
                 Row(

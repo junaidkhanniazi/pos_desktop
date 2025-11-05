@@ -8,6 +8,7 @@ import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart'; // ✅ ADD THIS
 import 'package:pos_desktop/core/utils/toast_helper.dart'; // ✅ ADD THIS
 import 'package:pos_desktop/core/routes/app_routes.dart'; // ✅ ADD THIS
+import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
 import 'package:pos_desktop/data/remote/sync/sync_service.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_sidebar.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_topbar.dart';
@@ -28,50 +29,50 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   int selectedIndex = 0;
   Timer? _subscriptionChecker; // ✅ ADD TIMER FOR PERIODIC CHECK
   bool _isSyncing = false;
-  Future<void> _manualSync() async {
-    setState(() => _isSyncing = true);
+  // Future<void> _manualSync() async {
+  //   setState(() => _isSyncing = true);
 
-    try {
-      final syncService = SyncService();
-      final docs = await getApplicationDocumentsDirectory();
+  //   try {
+  //     final syncService = SyncService();
+  //     final docs = await getApplicationDocumentsDirectory();
 
-      // ✅ Get owner email or name from storage
-      final email = await AuthStorage.getSavedEmail() ?? "owner";
-      final ownerName = email
-          .split('@')
-          .first
-          .toLowerCase(); // derive folder name
+  //     // ✅ Get owner email or name from storage
+  //     final email = await AuthStorage.getSavedEmail() ?? "owner";
+  //     final ownerName = email
+  //         .split('@')
+  //         .first
+  //         .toLowerCase(); // derive folder name
 
-      // ✅ Build store path dynamically (assuming default main_store)
-      final storeDbPath = p.join(
-        docs.path,
-        'Pos_Desktop/pos_data/$ownerName/${ownerName}_main_store/store.db',
-      );
+  //     // ✅ Build store path dynamically (assuming default main_store)
+  //     final storeDbPath = p.join(
+  //       docs.path,
+  //       'Pos_Desktop/pos_data/$ownerName/${ownerName}_main_store/store.db',
+  //     );
 
-      print("🔄 Manual sync started for: $storeDbPath");
+  //     print("🔄 Manual sync started for: $storeDbPath");
 
-      await syncService.pushUnsyncedData(storeDbPath);
-      await syncService.pullFromServer(storeDbPath);
+  //     await syncService.pushUnsyncedData(storeDbPath);
+  //     await syncService.pullFromServer(storeDbPath);
 
-      if (mounted) {
-        AppToast.show(
-          context,
-          message: "✅ Sync completed successfully!",
-          type: ToastType.success,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(
-          context,
-          message: "❌ Sync failed: $e",
-          type: ToastType.error,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
-    }
-  }
+  //     if (mounted) {
+  //       AppToast.show(
+  //         context,
+  //         message: "✅ Sync completed successfully!",
+  //         type: ToastType.success,
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       AppToast.show(
+  //         context,
+  //         message: "❌ Sync failed: $e",
+  //         type: ToastType.error,
+  //       );
+  //     }
+  //   } finally {
+  //     if (mounted) setState(() => _isSyncing = false);
+  //   }
+  // }
 
   final List<Widget> pages = const [
     OwnerOverviewScreen(),
@@ -186,11 +187,55 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.blueAccent,
-        icon: Icon(_isSyncing ? Icons.sync : Icons.cloud_sync),
-        label: Text(_isSyncing ? "Syncing..." : "Sync Now"),
-        onPressed: _isSyncing ? null : _manualSync,
+      // floatingActionButton: FloatingActionButton.extended(
+      //   backgroundColor: Colors.blueAccent,
+      //   icon: Icon(_isSyncing ? Icons.sync : Icons.cloud_sync),
+      //   label: Text(_isSyncing ? "Syncing..." : "Sync Now"),
+      //   onPressed: _isSyncing ? null : _manualSync,
+      // ),
+      // Add this to your owner_dashboard.dart in the scaffold
+      // If you want separate FABs for each scenario
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Expired FAB
+          FloatingActionButton(
+            onPressed: () => _testScenario(context, 'expired'),
+            child: Icon(Icons.timer_off),
+            backgroundColor: Colors.red,
+            mini: true,
+            tooltip: "Test Expired",
+          ),
+          SizedBox(height: 10),
+
+          // Expiring Soon FAB
+          FloatingActionButton(
+            onPressed: () => _testScenario(context, 'expiring_soon'),
+            child: Icon(Icons.warning),
+            backgroundColor: Colors.orange,
+            mini: true,
+            tooltip: "Test Expiring Soon",
+          ),
+          SizedBox(height: 10),
+
+          // Valid FAB
+          FloatingActionButton(
+            onPressed: () => _testScenario(context, 'valid'),
+            child: Icon(Icons.check_circle),
+            backgroundColor: Colors.green,
+            mini: true,
+            tooltip: "Test Valid",
+          ),
+          SizedBox(height: 10),
+
+          // Main FAB
+          FloatingActionButton(
+            onPressed: () => _showTestMenu(context),
+            child: Icon(Icons.bug_report),
+            backgroundColor: Colors.purple,
+            tooltip: "All Test Scenarios",
+          ),
+        ],
       ),
     );
   }
