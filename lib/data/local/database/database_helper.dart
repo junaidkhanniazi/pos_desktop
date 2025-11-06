@@ -260,6 +260,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER,
         name TEXT NOT NULL,
+        brand_id INTEGER, -- ✅ New
         sku TEXT UNIQUE,
         price REAL NOT NULL,
         cost_price REAL,
@@ -332,6 +333,18 @@ class DatabaseHelper {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     ''');
+    await db.execute('''
+  CREATE TABLE IF NOT EXISTS brands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    is_synced INTEGER DEFAULT 0,
+    last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE
+  );
+''');
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -373,7 +386,12 @@ class DatabaseHelper {
     int oldVersion,
     int newVersion,
   ) async {
-    if (oldVersion < 2) {
+    _logger.i('🔄 Upgrading store DB from $oldVersion → $newVersion');
+
+    try {
+      // ======================================================
+      // 1️⃣ Ensure all tables have sync columns
+      // ======================================================
       final tables = [
         'categories',
         'products',
@@ -383,16 +401,61 @@ class DatabaseHelper {
         'customers',
         'expenses',
       ];
+
       for (final t in tables) {
         await _ensureSyncColumns(db, t);
       }
+
+      // Ensure sync_metadata exists
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS sync_metadata (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          last_push_at TEXT,
-          last_pull_at TEXT
-        );
-      ''');
+      CREATE TABLE IF NOT EXISTS sync_metadata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        last_push_at TEXT,
+        last_pull_at TEXT
+      );
+    ''');
+
+      _logger.i('✅ Verified sync metadata and sync columns');
+
+      // ======================================================
+      // 2️⃣ Ensure brands table exists
+      // ======================================================
+      await db.execute('''
+      CREATE TABLE IF NOT EXISTS brands (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER,
+        name TEXT NOT NULL,
+        description TEXT,
+        is_synced INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE
+      );
+    ''');
+
+      _logger.i('✅ Verified or created brands table');
+
+      // ======================================================
+      // 3️⃣ Ensure brand_id column exists in products
+      // ======================================================
+      final hasBrandId = await _columnExists(db, 'products', 'brand_id');
+      if (!hasBrandId) {
+        await db.execute('ALTER TABLE products ADD COLUMN brand_id INTEGER;');
+        _logger.i('✅ Added missing brand_id column to products table');
+      } else {
+        _logger.i('ℹ️ brand_id column already exists in products table');
+      }
+
+      // ======================================================
+      // 4️⃣ Optional: Add foreign key constraint (if needed)
+      // ======================================================
+      // Note: SQLite doesn’t allow adding foreign keys directly via ALTER TABLE.
+      // If you ever need strict FK enforcement, you’d recreate the table manually.
+
+      _logger.i('✅ Store DB upgraded successfully ✅');
+    } catch (e) {
+      _logger.e('❌ Error during store DB upgrade: $e');
+      rethrow;
     }
   }
 
@@ -701,6 +764,64 @@ class DatabaseHelper {
         _logger.i('🔒 Database closed successfully');
       }
     });
+  }
+
+  // Add this method to DatabaseHelper
+  Future<void> debugProductsTable(String ownerName, String storeName) async {
+    try {
+      final dbPath = await getStoreDbPath(ownerName, storeName);
+      _logger.i('🔍 Debugging products table for: $dbPath');
+
+      final db = await databaseFactory.openDatabase(dbPath);
+
+      // 1. Check products table structure
+      final productsInfo = await db.rawQuery('PRAGMA table_info(products)');
+      _logger.i('📋 Products table columns:');
+      for (final column in productsInfo) {
+        _logger.i('   - ${column['name']} | ${column['type']}');
+      }
+
+      // 2. Check if brand_id column exists and has data
+      final hasBrandId = productsInfo.any((col) => col['name'] == 'brand_id');
+      if (hasBrandId) {
+        _logger.i('✅ brand_id column exists in schema');
+
+        // Check if any products have brand_id values
+        final brandData = await db.rawQuery('''
+        SELECT id, name, brand_id 
+        FROM products 
+        WHERE brand_id IS NOT NULL
+      ''');
+
+        if (brandData.isEmpty) {
+          _logger.i(
+            'ℹ️ All products have NULL brand_id (expected for existing data)',
+          );
+        } else {
+          _logger.i('📊 Products with brand_id values:');
+          for (final product in brandData) {
+            _logger.i(
+              '   - ${product['id']}: ${product['name']} → brand_id: ${product['brand_id']}',
+            );
+          }
+        }
+      }
+
+      // 3. Show first few products with all columns
+      final sampleProducts = await db.rawQuery('''
+      SELECT * FROM products LIMIT 5
+    ''');
+
+      _logger.i('📊 Sample products data:');
+      for (final product in sampleProducts) {
+        _logger.i('   Product: ${product['id']} - ${product['name']}');
+        _logger.i('   All columns: $product');
+      }
+
+      await db.close();
+    } catch (e) {
+      _logger.e('❌ Error debugging products table: $e');
+    }
   }
 
   Future<void> forceResetDatabase() async {

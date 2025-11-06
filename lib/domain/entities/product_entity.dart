@@ -12,6 +12,7 @@ class ProductEntity {
   final int isSynced;
   final DateTime? lastUpdated;
   final DateTime? createdAt;
+  final int? brandId; // New field for brand_id
 
   ProductEntity({
     this.id,
@@ -27,6 +28,7 @@ class ProductEntity {
     this.isSynced = 0,
     this.lastUpdated,
     this.createdAt,
+    this.brandId, // Include the brandId in constructor
   });
 
   @override
@@ -46,7 +48,8 @@ class ProductEntity {
         other.isActive == isActive &&
         other.isSynced == isSynced &&
         other.lastUpdated == lastUpdated &&
-        other.createdAt == createdAt;
+        other.createdAt == createdAt &&
+        other.brandId == brandId; // Compare brandId
   }
 
   @override
@@ -63,6 +66,7 @@ class ProductEntity {
         isActive.hashCode ^
         isSynced.hashCode ^
         lastUpdated.hashCode ^
-        createdAt.hashCode;
+        createdAt.hashCode ^
+        brandId.hashCode; // Include brandId in hashCode calculation
   }
 }

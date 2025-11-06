@@ -10,6 +10,7 @@ class ProductDao {
     required String ownerName,
     required int ownerId,
     required String storeName,
+    int? brandId, // Add brandId filter
   }) async {
     try {
       final db = await _dbHelper.openStoreDB(
@@ -18,7 +19,15 @@ class ProductDao {
         storeId,
         storeName,
       );
-      final data = await db.query('products', orderBy: 'name ASC');
+      final whereClause = brandId != null ? 'brand_id = ?' : null;
+      final whereArgs = brandId != null ? [brandId] : null;
+
+      final data = await db.query(
+        'products',
+        where: whereClause, // Add brandId filter to WHERE clause
+        whereArgs: whereArgs,
+        orderBy: 'name ASC',
+      );
       await db.close();
       return data.map((e) => ProductModel.fromMap(e)).toList();
     } catch (e) {
@@ -34,6 +43,7 @@ class ProductDao {
     required int ownerId,
     required String storeName,
     required int categoryId,
+    int? brandId, // Add brandId filter
   }) async {
     try {
       final db = await _dbHelper.openStoreDB(
@@ -42,16 +52,54 @@ class ProductDao {
         storeId,
         storeName,
       );
+      final whereClause =
+          'category_id = ? AND is_active = 1' +
+          (brandId != null ? ' AND brand_id = ?' : '');
+      final whereArgs = brandId != null ? [categoryId, brandId] : [categoryId];
+
       final data = await db.query(
         'products',
-        where: 'category_id = ? AND is_active = 1',
-        whereArgs: [categoryId],
+        where: whereClause,
+        whereArgs: whereArgs,
         orderBy: 'name ASC',
       );
       await db.close();
       return data.map((e) => ProductModel.fromMap(e)).toList();
     } catch (e) {
       print('❌ ERROR getting products by category: $e');
+      rethrow;
+    }
+  }
+
+  // 🔹 GET PRODUCTS BY BRAND (NEW METHOD)
+  Future<List<ProductModel>> getProductsByBrand({
+    required int storeId,
+    required String ownerName,
+    required int ownerId,
+    required String storeName,
+    required int brandId, // Add brandId parameter
+  }) async {
+    try {
+      final db = await _dbHelper.openStoreDB(
+        ownerId,
+        ownerName,
+        storeId,
+        storeName,
+      );
+
+      final whereClause = 'brand_id = ? AND is_active = 1'; // Filter by brandId
+      final whereArgs = [brandId];
+
+      final data = await db.query(
+        'products',
+        where: whereClause,
+        whereArgs: whereArgs,
+        orderBy: 'name ASC',
+      );
+      await db.close();
+      return data.map((e) => ProductModel.fromMap(e)).toList();
+    } catch (e) {
+      print('❌ ERROR getting products by brand: $e');
       rethrow;
     }
   }
@@ -100,6 +148,7 @@ class ProductDao {
     int quantity = 0,
     String? barcode,
     String? imageUrl,
+    int? brandId, // Add brandId to insert query
   }) async {
     try {
       final db = await _dbHelper.openStoreDB(
@@ -121,6 +170,7 @@ class ProductDao {
         'is_synced': 0,
         'created_at': DateTime.now().toIso8601String(),
         'last_updated': DateTime.now().toIso8601String(),
+        'brand_id': brandId, // Insert brandId as well
       });
       await db.close();
       return id;
@@ -144,6 +194,7 @@ class ProductDao {
     int? quantity,
     String? sku,
     String? barcode,
+    int? brandId, // Add brandId to update query
   }) async {
     try {
       final db = await _dbHelper.openStoreDB(
@@ -162,6 +213,8 @@ class ProductDao {
           'sku': sku,
           'barcode': barcode,
           if (quantity != null) 'quantity': quantity,
+          if (brandId != null)
+            'brand_id': brandId, // Update brandId if provided
           'last_updated': DateTime.now().toIso8601String(),
         },
         where: 'id = ?',
@@ -241,6 +294,7 @@ class ProductDao {
     required int ownerId,
     required String storeName,
     required String query,
+    int? brandId, // Add brandId filter for search
   }) async {
     try {
       final db = await _dbHelper.openStoreDB(
@@ -249,11 +303,17 @@ class ProductDao {
         storeId,
         storeName,
       );
+      final whereClause = brandId != null
+          ? '(name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND is_active = 1 AND brand_id = ?'
+          : '(name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND is_active = 1';
+      final whereArgs = brandId != null
+          ? ['%$query%', '%$query%', '%$query%', brandId]
+          : ['%$query%', '%$query%', '%$query%'];
+
       final data = await db.query(
         'products',
-        where:
-            '(name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND is_active = 1',
-        whereArgs: ['%$query%', '%$query%', '%$query%'],
+        where: whereClause,
+        whereArgs: whereArgs,
         orderBy: 'name ASC',
       );
       await db.close();

@@ -1,3 +1,5 @@
+import 'package:pos_desktop/domain/entities/product_entity.dart';
+
 class ProductModel {
   final int? id;
   final int categoryId;
@@ -12,6 +14,7 @@ class ProductModel {
   final int isSynced;
   final DateTime? lastUpdated;
   final DateTime? createdAt;
+  final int? brandId; // New field for brand_id
 
   ProductModel({
     this.id,
@@ -27,7 +30,9 @@ class ProductModel {
     this.isSynced = 0,
     this.lastUpdated,
     this.createdAt,
+    this.brandId, // Include the brandId in constructor
   });
+
   ProductEntity toEntity() {
     return ProductEntity(
       id: id,
@@ -43,6 +48,7 @@ class ProductModel {
       isSynced: isSynced,
       lastUpdated: lastUpdated,
       createdAt: createdAt,
+      brandId: brandId, // Include brandId when converting to entity
     );
   }
 
@@ -65,6 +71,7 @@ class ProductModel {
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'])
           : null,
+      brandId: map['brand_id'], // Extract brand_id from the map
     );
   }
 
@@ -83,6 +90,7 @@ class ProductModel {
       'is_synced': isSynced,
       'last_updated': lastUpdated?.toIso8601String(),
       'created_at': createdAt?.toIso8601String(),
+      'brand_id': brandId, // Add brand_id to the map for database operations
     };
   }
 }

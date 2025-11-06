@@ -1,29 +1,23 @@
 import 'package:pos_desktop/domain/entities/product_entity.dart';
 import 'package:pos_desktop/domain/repositories/product_repository.dart';
 
-class GetProductsByCategoryUseCase {
+class GetAllProductsUseCase {
   final ProductRepository _productRepository;
 
-  GetProductsByCategoryUseCase(this._productRepository);
+  GetAllProductsUseCase(this._productRepository);
 
   Future<List<ProductEntity>> execute({
     required int storeId,
     required String ownerName,
     required int ownerId,
     required String storeName,
-    required int categoryId,
     int? brandId, // Add brandId as optional parameter
   }) async {
-    print('🟡 [UseCase] GetProductsByCategoryUseCase.execute called');
-    print('   → categoryId: $categoryId');
-    print('   → brandId: $brandId'); // Check if this is null or has value
-    print('   → storeId: $storeId');
-    return await _productRepository.getProductsByCategory(
+    return await _productRepository.getProducts(
       storeId: storeId,
       ownerName: ownerName,
       ownerId: ownerId,
       storeName: storeName,
-      categoryId: categoryId,
       brandId: brandId, // Pass brandId to repository
     );
   }

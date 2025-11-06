@@ -53,13 +53,27 @@ class CategoryController extends GetxController {
     }
   }
 
+  // 🔥 FIXED - Get category ID by index (handle null case)
+  int getCategoryId(int index) {
+    if (categories.isEmpty || index < 0 || index >= categories.length) {
+      return 0; // Return 0 for "All Categories" or invalid index
+    }
+    return categories[index].id ?? 0; // Handle null case
+  }
+
   // Helper methods for UI
-  List<String> get categoryNames => categories.map((cat) => cat.name).toList();
+  List<String> get categoryNames {
+    List<String> names = ["All Categories"];
+    names.addAll(categories.map((cat) => cat.name).toList());
+    return names;
+  }
 
   String getCategoryName(int index) {
-    return categories.isNotEmpty && index < categories.length
-        ? categories[index].name
-        : "No Categories";
+    if (index == 0) return "All Categories";
+    if (categories.isEmpty || index - 1 >= categories.length) {
+      return "No Categories";
+    }
+    return categories[index - 1].name;
   }
 
   // Refresh method for store switching

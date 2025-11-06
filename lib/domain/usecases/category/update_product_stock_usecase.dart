@@ -1,22 +1,25 @@
-import 'package:pos_desktop/domain/entities/product_entity.dart';
 import 'package:pos_desktop/domain/repositories/product_repository.dart';
 
-class GetAllProductsUseCase {
-  final ProductRepository _productRepository;
+class UpdateProductStockUseCase {
+  final ProductRepository _repository;
 
-  GetAllProductsUseCase(this._productRepository);
+  UpdateProductStockUseCase(this._repository);
 
-  Future<List<ProductEntity>> execute({
+  Future<void> execute({
     required int storeId,
     required String ownerName,
     required int ownerId,
     required String storeName,
+    required int productId,
+    required int newQuantity,
   }) async {
-    return await _productRepository.getProducts(
+    await _repository.updateProductStock(
       storeId: storeId,
       ownerName: ownerName,
       ownerId: ownerId,
       storeName: storeName,
+      productId: productId,
+      newQuantity: newQuantity,
     );
   }
 }

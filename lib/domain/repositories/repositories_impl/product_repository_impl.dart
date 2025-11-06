@@ -14,12 +14,14 @@ class ProductRepositoryImpl implements ProductRepository {
     required String ownerName,
     required int ownerId,
     required String storeName,
+    int? brandId, // Accept brandId parameter
   }) async {
     final products = await _productDao.getProducts(
       storeId: storeId,
       ownerName: ownerName,
       ownerId: ownerId,
       storeName: storeName,
+      brandId: brandId, // Pass brandId to DAO
     );
     return products.map((model) => model.toEntity()).toList();
   }
@@ -31,6 +33,7 @@ class ProductRepositoryImpl implements ProductRepository {
     required int ownerId,
     required String storeName,
     required int categoryId,
+    int? brandId, // Accept brandId parameter
   }) async {
     final products = await _productDao.getProductsByCategory(
       storeId: storeId,
@@ -38,6 +41,26 @@ class ProductRepositoryImpl implements ProductRepository {
       ownerId: ownerId,
       storeName: storeName,
       categoryId: categoryId,
+      brandId: brandId, // Pass brandId to DAO
+    );
+    return products.map((model) => model.toEntity()).toList();
+  }
+
+  // New method to get products by brandId
+  @override
+  Future<List<ProductEntity>> getProductsByBrand({
+    required int storeId,
+    required String ownerName,
+    required int ownerId,
+    required String storeName,
+    required int brandId, // Added brandId parameter
+  }) async {
+    final products = await _productDao.getProductsByBrand(
+      storeId: storeId,
+      ownerName: ownerName,
+      ownerId: ownerId,
+      storeName: storeName,
+      brandId: brandId,
     );
     return products.map((model) => model.toEntity()).toList();
   }
@@ -74,6 +97,7 @@ class ProductRepositoryImpl implements ProductRepository {
     int quantity = 0,
     String? barcode,
     String? imageUrl,
+    int? brandId,
   }) async {
     return await _productDao.insertProduct(
       storeId: storeId,
@@ -88,6 +112,7 @@ class ProductRepositoryImpl implements ProductRepository {
       quantity: quantity,
       barcode: barcode,
       imageUrl: imageUrl,
+      brandId: brandId,
     );
   }
 

@@ -20,7 +20,9 @@ void main() async {
   setupDependencies();
 
   final dbHelper = DatabaseHelper();
-  final database = await dbHelper.database; // ✅ Initialize system DB
+  final database = await dbHelper.database;
+  await dbHelper.debugProductsTable('junaid', 'junaid_sweets');
+
   final syncService = SyncService(ownerName: 'junaid'); // 👈 Add ownerName
   // ====== Add push/pull calls here ======
   final storeDbPath =
