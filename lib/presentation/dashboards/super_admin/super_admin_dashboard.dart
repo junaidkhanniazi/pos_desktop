@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
-import 'package:pos_desktop/presentation/dashboards/owner/screens/subscription_management_screen.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/componenets/sidebar.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/componenets/topbar.dart';
-import 'package:pos_desktop/presentation/dashboards/super_admin/screens/owner_requests_screen.dart';
 import 'package:pos_desktop/presentation/dashboards/super_admin/screens/reports_screens.dart';
 import 'screens/overview_screen.dart';
 import 'screens/owners_screen.dart';
@@ -56,5 +54,23 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         ],
       ),
     );
+  }
+}
+
+class SubscriptionManagementScreen extends StatelessWidget {
+  const SubscriptionManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+class OwnerRequestsScreen extends StatelessWidget {
+  const OwnerRequestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
   }
 }

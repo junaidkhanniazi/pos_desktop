@@ -1,31 +1,26 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pos_desktop/core/storage/storage_service.dart';
 
 class AuthStorage {
   static const _keyRole = 'user_role';
   static const _keyEmail = 'user_email';
 
+  final StorageService storage;
+
+  AuthStorage(this.storage);
+
   /// Save login session
-  static Future<void> saveSession(String role, String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyRole, role);
-    await prefs.setString(_keyEmail, email);
+  Future<void> saveSession(String role, String email) async {
+    await storage.save(_keyRole, role);
+    await storage.save(_keyEmail, email);
   }
 
   /// Retrieve saved role (null if not logged in)
-  static Future<String?> getSavedRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyRole);
-  }
-
-  static Future<String?> getSavedEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyEmail);
-  }
+  Future<String?> getSavedRole() => storage.read(_keyRole);
+  Future<String?> getSavedEmail() => storage.read(_keyEmail);
 
   /// Clear session on logout
-  static Future<void> clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyRole);
-    await prefs.remove(_keyEmail);
+  Future<void> clearSession() async {
+    await storage.remove(_keyRole);
+    await storage.remove(_keyEmail);
   }
 }

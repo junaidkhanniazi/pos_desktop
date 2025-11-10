@@ -1,2 +1,2 @@
 // Shared domain enum for authenticated role
-enum AuthRole { superAdmin, owner, staff }
+enum AuthRole { superAdmin, owner }

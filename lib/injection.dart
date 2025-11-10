@@ -1,119 +1,210 @@
 import 'package:get/get.dart';
 
-// DAOs
+// ======================================================
+// 🧠 CORE LAYER
+// ======================================================
+import 'package:pos_desktop/core/storage/auth_storage.dart';
+import 'package:pos_desktop/core/storage/shared_prefs_storage.dart';
+import 'package:pos_desktop/core/storage/storage_service.dart';
+
+// ======================================================
+// 🧩 LOCAL DATABASE (DAO) LAYER
+// ======================================================
+import 'package:pos_desktop/data/local/dao/brand_dao.dart';
 import 'package:pos_desktop/data/local/dao/category_dao.dart';
 import 'package:pos_desktop/data/local/dao/product_dao.dart';
-import 'package:pos_desktop/data/local/dao/brand_dao.dart'; // ✅ ADD THIS
+import 'package:pos_desktop/data/local/dao/store_dao.dart';
+import 'package:pos_desktop/data/local/dao/supplier_dao.dart';
+import 'package:pos_desktop/data/local/dao/sync_metadata_dao.dart';
 
-// Repositories
+// ======================================================
+// 🧱 DATA LAYER - REPOSITORY IMPLEMENTATIONS
+// ======================================================
+import 'package:pos_desktop/data/repositories_impl/auth_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/owner_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/subscription_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/subscription_plan_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/store_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/category_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/brand_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/product_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/sale_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/customer_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/supplier_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/expense_repository_impl.dart';
+import 'package:pos_desktop/data/repositories_impl/sync_repository_impl.dart';
+
+// ======================================================
+// 🧠 DOMAIN LAYER - REPOSITORY INTERFACES
+// ======================================================
+import 'package:pos_desktop/domain/repositories/auth_repository.dart';
+import 'package:pos_desktop/domain/repositories/owner_repository.dart';
+import 'package:pos_desktop/domain/repositories/subscription_repository.dart';
+import 'package:pos_desktop/domain/repositories/subscription_plan_repository.dart';
+import 'package:pos_desktop/domain/repositories/store_repository.dart';
 import 'package:pos_desktop/domain/repositories/category_repository.dart';
+import 'package:pos_desktop/domain/repositories/brand_repository.dart';
 import 'package:pos_desktop/domain/repositories/product_repository.dart';
-import 'package:pos_desktop/domain/repositories/brand_repository.dart'; // ✅ ADD THIS
-import 'package:pos_desktop/domain/repositories/repositories_impl/category_repository_impl.dart';
-import 'package:pos_desktop/domain/repositories/repositories_impl/product_repository_impl.dart';
-import 'package:pos_desktop/domain/repositories/repositories_impl/brand_repository_impl.dart'; // ✅ ADD THIS
-import 'package:pos_desktop/domain/usecases/category/add_product_usecase.dart';
+import 'package:pos_desktop/domain/repositories/sale_repository.dart';
+import 'package:pos_desktop/domain/repositories/customer_repository.dart';
+import 'package:pos_desktop/domain/repositories/supplier_repository.dart';
+import 'package:pos_desktop/domain/repositories/expense_repository.dart';
+import 'package:pos_desktop/domain/repositories/sync_repository.dart';
 
-// UseCases
-import 'package:pos_desktop/domain/usecases/category/get_categories_usecase.dart';
-import 'package:pos_desktop/domain/usecases/category/get_products_by_category_usecase.dart';
-import 'package:pos_desktop/domain/usecases/category/update_product_stock_usecase.dart';
-import 'package:pos_desktop/domain/usecases/category/get_all_products_usecase.dart';
+// ======================================================
+// ⚙️ DOMAIN LAYER - USECASES
+// ======================================================
+import 'package:pos_desktop/domain/usecases/auth_usecase.dart';
+import 'package:pos_desktop/domain/usecases/owner_usecase.dart';
+import 'package:pos_desktop/domain/usecases/subscription_usecase.dart';
+import 'package:pos_desktop/domain/usecases/store_usecase.dart';
+import 'package:pos_desktop/domain/usecases/category_usecase.dart';
+import 'package:pos_desktop/domain/usecases/brand_usecase.dart';
+import 'package:pos_desktop/domain/usecases/product_usecase.dart';
+import 'package:pos_desktop/domain/usecases/sale_usecase.dart';
+import 'package:pos_desktop/domain/usecases/customer_usecase.dart';
+import 'package:pos_desktop/domain/usecases/supplier_usecase.dart';
+import 'package:pos_desktop/domain/usecases/expense_usecase.dart';
+import 'package:pos_desktop/domain/usecases/sync_usecase.dart';
 
-// ✅ SINGLE BRAND USE CASE FILE
-import 'package:pos_desktop/domain/usecases/brand_use_case.dart';
-
-// Controllers
-import 'package:pos_desktop/presentation/state_management/controllers/category_controller.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/product_controller.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/brand_controller.dart'; // ✅ ADD THIS
-
+// ======================================================
+// 🚀 DEPENDENCY SETUP ENTRY POINT
+// ======================================================
 void setupDependencies() {
   print('🔄 Setting up dependencies...');
 
-  // ========== DAOs ==========
-  Get.lazyPut<CategoryDao>(() => CategoryDao(), fenix: true);
-  Get.lazyPut<ProductDao>(() => ProductDao(), fenix: true);
-  Get.lazyPut<BrandDao>(() => BrandDao(), fenix: true); // ✅ ADD THIS
-  print('✅ CategoryDao registered');
-  print('✅ ProductDao registered');
-  print('✅ BrandDao registered'); // ✅ ADD THIS
+  // ======================================================
+  // CORE LAYER
+  // ======================================================
+  Get.lazyPut<StorageService>(() => SharedPrefsStorage(), fenix: true);
+  Get.lazyPut<AuthStorage>(
+    () => AuthStorage(Get.find<StorageService>()),
+    fenix: true,
+  );
 
-  // ========== REPOSITORIES ==========
+  // ======================================================
+  // LOCAL DATABASE (DAO)
+  // ======================================================
+  Get.lazyPut<CategoryDao>(() => CategoryDao(), fenix: true);
+  Get.lazyPut<BrandDao>(() => BrandDao(), fenix: true);
+  Get.lazyPut<ProductDao>(() => ProductDao(), fenix: true);
+  Get.lazyPut<StoreDao>(() => StoreDao(), fenix: true);
+  Get.lazyPut<SupplierDao>(() => SupplierDao(), fenix: true);
+  Get.lazyPut<SyncMetadataDao>(() => SyncMetadataDao(), fenix: true);
+
+  // ======================================================
+  // DATA LAYER – REPOSITORY IMPLEMENTATIONS
+  // ======================================================
+  Get.lazyPut<AuthRepository>(() => AuthRepositoryImpl(), fenix: true);
+  Get.lazyPut<OwnerRepository>(() => OwnerRepositoryImpl(), fenix: true);
+  Get.lazyPut<SubscriptionRepository>(
+    () => SubscriptionRepositoryImpl(),
+    fenix: true,
+  );
+  Get.lazyPut<SubscriptionPlanRepository>(
+    () => SubscriptionPlanRepositoryImpl(),
+    fenix: true,
+  );
+
+  // 🧱 Local + DAO-backed repositories
+  Get.lazyPut<StoreRepository>(() => StoreRepositoryImpl());
   Get.lazyPut<CategoryRepository>(
     () => CategoryRepositoryImpl(Get.find<CategoryDao>()),
+    fenix: true,
+  );
+  Get.lazyPut<BrandRepository>(
+    () => BrandRepositoryImpl(Get.find<BrandDao>()),
     fenix: true,
   );
   Get.lazyPut<ProductRepository>(
     () => ProductRepositoryImpl(Get.find<ProductDao>()),
     fenix: true,
   );
-  Get.lazyPut<BrandRepository>(
-    () => BrandRepositoryImpl(Get.find<BrandDao>()), // ✅ ADD THIS
-    fenix: true,
-  );
-  Get.lazyPut<AddProductUseCase>(
-    () => AddProductUseCase(Get.find<ProductRepository>()),
+  Get.lazyPut<SupplierRepository>(() => SupplierRepositoryImpl(), fenix: true);
+  Get.lazyPut<ExpenseRepository>(() => ExpenseRepositoryImpl(), fenix: true);
+  Get.lazyPut<SaleRepository>(() => SaleRepositoryImpl(), fenix: true);
+  Get.lazyPut<CustomerRepository>(() => CustomerRepositoryImpl(), fenix: true);
+  Get.lazyPut<SyncRepository>(() => SyncRepositoryImpl(), fenix: true);
+
+  // ======================================================
+  // DOMAIN LAYER – USECASES (wired to REPOSITORY INTERFACES)
+  // ======================================================
+
+  // AUTH
+  Get.lazyPut<AuthUseCase>(
+    () => AuthUseCase(Get.find<AuthRepository>()),
     fenix: true,
   );
 
-  print('✅ AddProductUseCase registered');
-  print('✅ CategoryRepository registered');
-  print('✅ ProductRepository registered');
-  print('✅ BrandRepository registered'); // ✅ ADD THIS
-
-  // ========== USE CASES ==========
-  // Category UseCases
-  Get.lazyPut<GetCategoriesUseCase>(
-    () => GetCategoriesUseCase(Get.find<CategoryRepository>()),
-    fenix: true,
-  );
-  Get.lazyPut<GetProductsByCategoryUseCase>(
-    () => GetProductsByCategoryUseCase(Get.find<ProductRepository>()),
-    fenix: true,
-  );
-  Get.lazyPut<GetAllProductsUseCase>(
-    () => GetAllProductsUseCase(Get.find<ProductRepository>()),
-    fenix: true,
-  );
-  Get.lazyPut<UpdateProductStockUseCase>(
-    () => UpdateProductStockUseCase(Get.find<ProductRepository>()),
+  // OWNER
+  Get.lazyPut<OwnerUseCase>(
+    () => OwnerUseCase(Get.find<OwnerRepository>()),
     fenix: true,
   );
 
-  // ✅ SINGLE BRAND USE CASE
+  // SUBSCRIPTION
+  Get.lazyPut<SubscriptionUseCase>(
+    () => SubscriptionUseCase(
+      Get.find<SubscriptionRepository>(),
+      Get.find<SubscriptionPlanRepository>(),
+    ),
+    fenix: true,
+  );
+
+  // STORE
+  Get.lazyPut<StoreUseCase>(
+    () => StoreUseCase(Get.find<StoreRepository>()),
+    fenix: true,
+  );
+
+  // CATEGORY
+  Get.lazyPut<CategoryUseCase>(
+    () => CategoryUseCase(Get.find<CategoryRepository>()),
+    fenix: true,
+  );
+
+  // BRAND
   Get.lazyPut<BrandUseCase>(
     () => BrandUseCase(Get.find<BrandRepository>()),
     fenix: true,
   );
 
-  print('✅ GetCategoriesUseCase registered');
-  print('✅ GetProductsByCategoryUseCase registered');
-  print('✅ GetAllProductsUseCase registered');
-  print('✅ UpdateProductStockUseCase registered');
-  print('✅ BrandUseCase registered'); // ✅ ADD THIS
+  // PRODUCT
+  Get.lazyPut<ProductUseCase>(
+    () => ProductUseCase(Get.find<ProductRepository>()),
+    fenix: true,
+  );
 
-  // ========== CONTROLLERS ==========
-  Get.lazyPut<CategoryController>(
-    () => CategoryController(Get.find<GetCategoriesUseCase>()),
+  // SALE
+  Get.lazyPut<SaleUseCase>(
+    () => SaleUseCase(Get.find<SaleRepository>()),
     fenix: true,
   );
-  Get.lazyPut<ProductController>(
-    () => ProductController(
-      Get.find<GetProductsByCategoryUseCase>(),
-      Get.find<GetAllProductsUseCase>(),
-      Get.find<UpdateProductStockUseCase>(),
-      Get.find<AddProductUseCase>(), // ✅ ADD THIS
-    ),
-    fenix: true,
-  );
-  Get.lazyPut<BrandController>(
-    () => BrandController(Get.find<BrandUseCase>()), // ✅ SIMPLE CONSTRUCTOR
-    fenix: true,
-  );
-  print('✅ CategoryController registered');
-  print('✅ ProductController registered');
-  print('✅ BrandController registered'); // ✅ ADD THIS
 
-  print('🎉 All dependencies setup complete!');
+  // CUSTOMER
+  Get.lazyPut<CustomerUseCase>(
+    () => CustomerUseCase(Get.find<CustomerRepository>()),
+    fenix: true,
+  );
+
+  // SUPPLIER
+  Get.lazyPut<SupplierUseCase>(
+    () => SupplierUseCase(Get.find<SupplierRepository>()),
+    fenix: true,
+  );
+
+  // EXPENSE
+  Get.lazyPut<ExpenseUseCase>(
+    () => ExpenseUseCase(Get.find<ExpenseRepository>()),
+    fenix: true,
+  );
+
+  // SYNC
+  Get.lazyPut<SyncUseCase>(
+    () => SyncUseCase(Get.find<SyncRepository>()),
+    fenix: true,
+  );
+
+  print('🎉 All dependencies registered successfully!');
+  print('✅ Core + DAO + Data + Domain layers fully initialized.');
 }

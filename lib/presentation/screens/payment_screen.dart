@@ -5,11 +5,10 @@ import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
-import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
+import 'package:pos_desktop/data/repositories_impl/owner_repository_impl.dart';
+import 'package:pos_desktop/domain/entities/online/subscription_plan_entity.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_loader.dart';
-import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
-import 'package:pos_desktop/data/models/subscription_model.dart';
 
 class PaymentScreen extends StatefulWidget {
   final SubscriptionPlanEntity selectedPlan;
@@ -23,8 +22,7 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   File? _receiptImage;
   bool _isSubmitting = false;
-  bool _isLoadingData = true; // ✅ Add loading state for temp data
-  final _subscriptionDao = SubscriptionDao();
+  bool _isLoadingData = true;
   Map<String, dynamic>? _tempOwnerData;
 
   @override
@@ -37,19 +35,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       _tempOwnerData = await AuthStorageHelper.getTempOwnerData();
       print('📋 Payment screen loaded temp data: $_tempOwnerData');
-
-      // ✅ Force UI rebuild after data is loaded
-      if (mounted) {
-        setState(() {
-          _isLoadingData = false;
-        });
-      }
     } catch (e) {
       print('❌ Error loading temp data: $e');
+    } finally {
       if (mounted) {
-        setState(() {
-          _isLoadingData = false;
-        });
+        setState(() => _isLoadingData = false);
       }
     }
   }
@@ -94,27 +84,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final ownerId =
-          int.tryParse(_tempOwnerData!['ownerId']?.toString() ?? '0') ?? 0;
-
-      final now = DateTime.now();
-      final model = SubscriptionModel(
-        ownerId: ownerId,
-        subscriptionPlanId: widget.selectedPlan.id,
-        subscriptionPlanName: widget.selectedPlan.name,
-        status: 'inactive',
+      await OwnerRepositoryImpl().updateOwnerSubscription(
+        ownerId: _tempOwnerData!['email']
+            .toString(), // backend identifies owner via email
+        subscriptionPlan: widget.selectedPlan.name,
         receiptImage: _receiptImage!.path,
-        paymentDate: now.toIso8601String(),
         subscriptionAmount: widget.selectedPlan.price,
-        subscriptionStartDate: now.toIso8601String(),
-        subscriptionEndDate: now
-            .add(Duration(days: widget.selectedPlan.durationDays))
-            .toIso8601String(),
-        createdAt: now.toIso8601String(),
-        updatedAt: now.toIso8601String(),
       );
 
-      await _subscriptionDao.insertSubscription(model);
       await AuthStorageHelper.clearTempOwnerData();
 
       AppToast.show(
@@ -169,7 +146,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildLeftSummary() {
-    // ✅ Show loading indicator while temp data is loading
     if (_isLoadingData) {
       return Container(
         width: 360,
@@ -216,7 +192,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 24),
           _buildPlanCard(),
           const SizedBox(height: 24),
-          // ✅ Use null-aware operators with fallbacks
           _infoRow(
             Icons.store_rounded,
             "Store Name",

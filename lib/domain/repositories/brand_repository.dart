@@ -1,14 +1,14 @@
-import 'package:pos_desktop/data/models/brands_model.dart';
+import 'package:pos_desktop/domain/entities/store/brand_entity.dart';
 
 abstract class BrandRepository {
-  Future<List<BrandModel>> getBrands({
+  Future<List<BrandEntity>> getBrands({
     required int storeId,
     required String ownerName,
     required int ownerId,
     required String storeName,
   });
 
-  Future<List<BrandModel>> getBrandsByCategory({
+  Future<List<BrandEntity>> getBrandsByCategory({
     required int storeId,
     required String ownerName,
     required int ownerId,
@@ -16,7 +16,7 @@ abstract class BrandRepository {
     required int categoryId,
   });
 
-  Future<BrandModel?> getBrandById({
+  Future<BrandEntity?> getBrandById({
     required int storeId,
     required String ownerName,
     required int ownerId,
@@ -52,7 +52,7 @@ abstract class BrandRepository {
     required int brandId,
   });
 
-  Future<List<BrandModel>> searchBrands({
+  Future<List<BrandEntity>> searchBrands({
     required int storeId,
     required String ownerName,
     required int ownerId,

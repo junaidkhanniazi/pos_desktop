@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/logout_controller.dart';
+import 'package:pos_desktop/presentation/controllers/auth_controller.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
-  final _logoutController = LogoutController(); // ✅ use controller
+  final _logoutController = AuthController(); // ✅ use controller
 
   Sidebar({
     super.key,
@@ -103,7 +103,7 @@ class Sidebar extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            onTap: () => _logoutController.logout(context), // ✅ clean call
+            onTap: () => _logoutController.logout(), // ✅ clean call
           ),
           const SizedBox(height: 10),
         ],

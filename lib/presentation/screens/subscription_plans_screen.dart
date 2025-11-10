@@ -3,9 +3,8 @@ import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
-import 'package:pos_desktop/data/local/dao/subscription_plan_dao.dart';
-import 'package:pos_desktop/data/local/database/database_helper.dart';
-import 'package:pos_desktop/domain/entities/subscription_plan_entity.dart';
+import 'package:pos_desktop/data/repositories_impl/owner_repository_impl.dart';
+import 'package:pos_desktop/domain/entities/online/subscription_plan_entity.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 
 class SubscriptionPlansScreen extends StatefulWidget {
@@ -34,14 +33,12 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
       tempOwnerData = await AuthStorageHelper.getTempOwnerData();
       print('📋 Loaded temp owner data: $tempOwnerData');
 
-      // Load subscription plans
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final dao = SubscriptionPlanDao(db);
-      final allPlans = await dao.getAllActivePlans();
+      // ✅ Load subscription plans from API
+      final repo = OwnerRepositoryImpl();
+      final allPlans = await repo.getSubscriptionPlans();
 
       setState(() {
-        plans = allPlans;
+        plans = allPlans.map((p) => SubscriptionPlanEntity.fromMap(p)).toList();
         isLoading = false;
       });
     } catch (e) {

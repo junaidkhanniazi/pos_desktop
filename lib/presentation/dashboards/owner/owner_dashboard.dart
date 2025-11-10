@@ -1,19 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
 import 'package:pos_desktop/core/routes/app_routes.dart';
-import 'package:pos_desktop/data/local/dao/subscription_dao.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_sidebar.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/componets/owner_topbar.dart';
-import 'package:pos_desktop/presentation/dashboards/owner/screens/owner_store_management_screen.dart';
-import 'package:pos_desktop/presentation/state_management/controllers/category_controller.dart';
 import 'screens/owner_overview_screen.dart';
-import 'screens/owner_inventory_screen.dart';
 import 'screens/owner_reports_screen.dart';
 import 'screens/owner_staff_screen.dart';
 
@@ -27,19 +22,6 @@ class OwnerDashboard extends StatefulWidget {
 class _OwnerDashboardState extends State<OwnerDashboard> {
   int selectedIndex = 0;
   Timer? _subscriptionChecker;
-  bool _isSyncing = false;
-
-  // 🔥 REMOVED - GlobalKey not needed anymore
-  // final GlobalKey _inventoryKey = GlobalKey();
-
-  // 🔥 UPDATED - Method to refresh inventory
-  void _refreshInventory() {
-    // 🔹 DIRECTLY CALL CONTROLLER - NO SCREEN REFERENCE NEEDED
-    final categoryController = Get.find<CategoryController>();
-    categoryController.loadCategories(); // Direct call to controller
-
-    print("🔄 Inventory refresh triggered from dashboard");
-  }
 
   @override
   void initState() {
@@ -52,8 +34,8 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   void _startSubscriptionChecker() {
     _subscriptionChecker = Timer.periodic(Duration(minutes: 5), (timer) async {
       // ✅ Step 1: Mark expired subscriptions inactive
-      final subDao = SubscriptionDao();
-      await subDao.markExpiredSubscriptions();
+      // final subDao = SubscriptionDao();
+      // await subDao.markExpiredSubscriptions();
 
       // ✅ Step 2: Check current owner subscription
       final shouldLogout =
@@ -144,7 +126,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
             child: Column(
               children: [
                 // 🔥 UPDATED - Pass the callback to OwnerTopBar
-                OwnerTopBar(onStoreSwitched: _refreshInventory),
+                OwnerTopBar(),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -172,23 +154,41 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final ownerId = await AuthStorageHelper.getOwnerId();
-          if (ownerId != null) {
-            final subDao = SubscriptionDao();
-            await subDao.testExpireSubscription(int.parse(ownerId));
-            AppToast.show(context, message: "Subscription expired for testing");
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: () async {
+      //     final ownerId = await AuthStorageHelper.getOwnerId();
+      //     if (ownerId != null) {
+      //       // final subDao = SubscriptionDao();
+      //       await subDao.testExpireSubscription(int.parse(ownerId));
+      //       AppToast.show(context, message: "Subscription expired for testing");
 
-            // Optional: Auto logout to test the flow
-            await AuthStorageHelper.logout();
-            Navigator.pushReplacementNamed(context, '/login');
-          }
-        },
-        child: Icon(Icons.timer_off),
-        backgroundColor: Colors.orange,
-        tooltip: "Test Subscription Expiry",
-      ),
+      //       // Optional: Auto logout to test the flow
+      //       await AuthStorageHelper.logout();
+      //       Navigator.pushReplacementNamed(context, '/login');
+      //     }
+      //   },
+      //   child: Icon(Icons.timer_off),
+      //   backgroundColor: Colors.orange,
+      //   tooltip: "Test Subscription Expiry",
+      // ),
     );
+  }
+}
+
+class OwnerInventoryScreen extends StatelessWidget {
+  const OwnerInventoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
+  }
+}
+
+class OwnerStoreManagementScreen extends StatelessWidget {
+  const OwnerStoreManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
   }
 }

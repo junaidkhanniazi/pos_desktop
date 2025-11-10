@@ -1,4 +1,4 @@
-import 'package:pos_desktop/domain/entities/product_entity.dart';
+import 'package:pos_desktop/domain/entities/store/product_entity.dart';
 
 abstract class ProductRepository {
   Future<List<ProductEntity>> getProducts({
@@ -6,7 +6,7 @@ abstract class ProductRepository {
     required String ownerName,
     required int ownerId,
     required String storeName,
-    int? brandId, // Add brandId as an optional parameter
+    int? brandId,
   });
 
   Future<List<ProductEntity>> getProductsByCategory({
@@ -15,7 +15,7 @@ abstract class ProductRepository {
     required int ownerId,
     required String storeName,
     required int categoryId,
-    int? brandId, // Add brandId as an optional parameter
+    int? brandId,
   });
 
   Future<ProductEntity?> getProductById({
@@ -34,7 +34,7 @@ abstract class ProductRepository {
     required int categoryId,
     required String name,
     required double price,
-    int? brandId, // ✅ ADD THIS PARAMETER
+    int? brandId,
     String? sku,
     double? costPrice,
     int quantity = 0,
@@ -81,11 +81,12 @@ abstract class ProductRepository {
     required String storeName,
     required String query,
   });
+
   Future<List<ProductEntity>> getProductsByBrand({
     required int storeId,
     required String ownerName,
     required int ownerId,
     required String storeName,
-    required int brandId, // Added brandId parameter
+    required int brandId,
   });
 }

@@ -22,7 +22,7 @@ class _OwnerTopBarState extends State<OwnerTopBar> {
   final StoreDao _storeDao = StoreDao();
   List<StoreModel> _stores = [];
   StoreModel? _currentStore;
-  bool _isLoading = true;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -33,18 +33,16 @@ class _OwnerTopBarState extends State<OwnerTopBar> {
   Future<void> _loadStores() async {
     try {
       final ownerId = await AuthStorageHelper.getOwnerId();
-      final email = await AuthStorageHelper.getEmail();
-      final ownerName = email?.split('@').first ?? "owner";
 
       if (ownerId != null) {
-        _stores = await _storeDao.getAllStores(int.parse(ownerId), ownerName);
+        _stores = await _storeDao.getAllStores(int.parse(ownerId));
         await _loadCurrentStore();
       }
     } catch (e) {
       _showErrorToast('Failed to load stores');
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => isLoading = false);
       }
     }
   }
@@ -93,26 +91,6 @@ class _OwnerTopBarState extends State<OwnerTopBar> {
 
       if (ownerId != null) {
         print("📁 LOADING CATEGORIES FROM DATABASE...");
-
-        // 🔹 Pass correct store name for loading categories from the correct DB
-        final categories = await _storeDao.getStoreCategories(
-          newStore.id!,
-          ownerName,
-          int.parse(ownerId),
-          newStore.storeName, // Ensure passing correct store name here
-        );
-
-        print("✅ CATEGORIES IN ${newStore.storeName.toUpperCase()}:");
-        if (categories.isEmpty) {
-          print("   🚫 No categories found in database");
-        } else {
-          for (final category in categories) {
-            print(
-              "   🏷️  ID: ${category['id']} | Name: ${category['name']} | Desc: ${category['description']}",
-            );
-          }
-          print("   📊 TOTAL CATEGORIES: ${categories.length}");
-        }
 
         final dbPath = await DatabaseHelper().getStoreDbPath(
           ownerName,
@@ -377,7 +355,7 @@ class _OwnerTopBarState extends State<OwnerTopBar> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        store.folderPath.split('/').last,
+                        store.folderPath!.split('/').last,
                         style: AppText.small.copyWith(
                           color: AppColors.textLight,
                           fontSize: 11,

@@ -1,4 +1,4 @@
-import 'package:pos_desktop/domain/entities/category_entity.dart';
+import 'package:pos_desktop/domain/entities/store/category_entity.dart';
 
 abstract class CategoryRepository {
   Future<List<CategoryEntity>> getCategories({

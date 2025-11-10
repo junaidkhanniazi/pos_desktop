@@ -1,44 +1,63 @@
-import 'package:pos_desktop/domain/entities/owner_entity.dart';
+import 'dart:convert';
+import 'package:pos_desktop/domain/entities/online/owner_entity.dart';
 
-class OwnerModel {
-  final int? id;
-  final int? superAdminId;
-  final String shopName;
-  final String ownerName;
-  final String email;
-  final String password;
-  final String contact;
-  final String? status;
-  final bool isActive;
-  final String? createdAt;
+class OwnerModel extends OwnerEntity {
+  const OwnerModel({
+    required int id,
+    int? superAdminId,
+    required String shopName,
+    required String ownerName,
+    required String email,
+    required String password,
+    required String contact,
+    required String status,
+    required bool isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : super(
+         id: id,
+         superAdminId: superAdminId,
+         shopName: shopName,
+         ownerName: ownerName,
+         email: email,
+         password: password,
+         contact: contact,
+         status: status,
+         isActive: isActive,
+         createdAt: createdAt,
+         updatedAt: updatedAt,
+       );
 
-  OwnerModel({
-    this.id,
-    this.superAdminId,
-    required this.shopName,
-    required this.ownerName,
-    required this.email,
-    required this.password,
-    required this.contact,
-    this.status = 'pending',
-    this.isActive = false,
-    this.createdAt,
-  });
+  factory OwnerModel.fromEntity(OwnerEntity e) => OwnerModel(
+    id: e.id,
+    superAdminId: e.superAdminId,
+    shopName: e.shopName,
+    ownerName: e.ownerName,
+    email: e.email,
+    password: e.password,
+    contact: e.contact,
+    status: e.status,
+    isActive: e.isActive,
+    createdAt: e.createdAt,
+    updatedAt: e.updatedAt,
+  );
 
-  // ------------------------------
-  // 🔹 Map <-> Model converters
-  // ------------------------------
   factory OwnerModel.fromMap(Map<String, dynamic> map) => OwnerModel(
-    id: map['id'] as int?,
-    superAdminId: map['super_admin_id'] as int?,
+    id: map['id'] ?? 0,
+    superAdminId: map['super_admin_id'],
     shopName: map['shop_name'] ?? '',
     ownerName: map['owner_name'] ?? '',
     email: map['email'] ?? '',
     password: map['password'] ?? '',
-    contact: map['contact']?.toString() ?? '',
-    status: map['status'] ?? 'pending',
+    contact: map['contact'] ?? '',
+    status: map['status'] ?? '',
     isActive: (map['is_active'] ?? 0) == 1,
-    createdAt: map['created_at']?.toString(),
+    createdAt: map['created_at'] != null
+        ? DateTime.tryParse(map['created_at'])
+        : null,
+    updatedAt: map['updated_at'] != null
+        ? DateTime.tryParse(map['updated_at'])
+        : null,
   );
 
   Map<String, dynamic> toMap() => {
@@ -51,60 +70,12 @@ class OwnerModel {
     'contact': contact,
     'status': status,
     'is_active': isActive ? 1 : 0,
-    'created_at': createdAt,
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
   };
 
-  // ------------------------------
-  // 🔹 Status helpers
-  // ------------------------------
-  bool get isApproved => status == 'approved' && isActive;
-  bool get isPending => status == 'pending';
+  factory OwnerModel.fromJson(String source) =>
+      OwnerModel.fromMap(json.decode(source) as Map<String, dynamic>);
 
-  // ------------------------------
-  // 🔹 Entity mapper
-  // ------------------------------
-  OwnerEntity toEntity() {
-    return OwnerEntity(
-      id: id?.toString() ?? '',
-      name: ownerName,
-      email: email,
-      storeName: shopName,
-      password: password,
-      contact: contact,
-      superAdminId: superAdminId?.toString(),
-      status: _mapStatus(status),
-      createdAt: DateTime.tryParse(createdAt ?? '') ?? DateTime.now(),
-    );
-  }
-
-  static OwnerModel fromEntity(OwnerEntity e) {
-    return OwnerModel(
-      id: int.tryParse(e.id),
-      shopName: e.storeName,
-      ownerName: e.name,
-      email: e.email,
-      password: e.password,
-      contact: e.contact,
-      superAdminId: e.superAdminId != null
-          ? int.tryParse(e.superAdminId!)
-          : null,
-      status: e.status.name,
-      isActive: e.status == OwnerStatus.active,
-      createdAt: e.createdAt.toIso8601String(),
-    );
-  }
-
-  static OwnerStatus _mapStatus(String? s) {
-    switch (s?.toLowerCase()) {
-      case 'active':
-      case 'approved':
-        return OwnerStatus.active;
-      case 'suspended':
-        return OwnerStatus.suspended;
-      case 'rejected':
-        return OwnerStatus.rejected;
-      default:
-        return OwnerStatus.pending;
-    }
-  }
+  String toJson() => json.encode(toMap());
 }

@@ -1,96 +1,98 @@
-import 'package:pos_desktop/domain/entities/product_entity.dart';
+import 'dart:convert';
+import 'package:pos_desktop/domain/entities/store/product_entity.dart';
 
-class ProductModel {
-  final int? id;
-  final int categoryId;
-  final String name;
-  final String? sku;
-  final double price;
-  final double? costPrice;
-  final int quantity;
-  final String? barcode;
-  final String? imageUrl;
-  final int isActive;
-  final int isSynced;
-  final DateTime? lastUpdated;
-  final DateTime? createdAt;
-  final int? brandId; // New field for brand_id
+class ProductModel extends ProductEntity {
+  const ProductModel({
+    int? id,
+    int? categoryId,
+    int? brandId,
+    required String name,
+    String? sku,
+    required double price,
+    double? costPrice,
+    required int quantity,
+    String? barcode,
+    String? imageUrl,
+    bool isActive = true,
+    bool isSynced = false,
+    DateTime? lastUpdated,
+    DateTime? createdAt,
+  }) : super(
+         id: id,
+         categoryId: categoryId,
+         brandId: brandId,
+         name: name,
+         sku: sku,
+         price: price,
+         costPrice: costPrice,
+         quantity: quantity,
+         barcode: barcode,
+         imageUrl: imageUrl,
+         isActive: isActive,
+         isSynced: isSynced,
+         lastUpdated: lastUpdated,
+         createdAt: createdAt,
+       );
 
-  ProductModel({
-    this.id,
-    required this.categoryId,
-    required this.name,
-    this.sku,
-    required this.price,
-    this.costPrice,
-    this.quantity = 0,
-    this.barcode,
-    this.imageUrl,
-    this.isActive = 1,
-    this.isSynced = 0,
-    this.lastUpdated,
-    this.createdAt,
-    this.brandId, // Include the brandId in constructor
-  });
+  factory ProductModel.fromEntity(ProductEntity e) => ProductModel(
+    id: e.id,
+    categoryId: e.categoryId,
+    brandId: e.brandId,
+    name: e.name,
+    sku: e.sku,
+    price: e.price,
+    costPrice: e.costPrice,
+    quantity: e.quantity,
+    barcode: e.barcode,
+    imageUrl: e.imageUrl,
+    isActive: e.isActive,
+    isSynced: e.isSynced,
+    lastUpdated: e.lastUpdated,
+    createdAt: e.createdAt,
+  );
 
-  ProductEntity toEntity() {
-    return ProductEntity(
-      id: id,
-      categoryId: categoryId,
-      name: name,
-      sku: sku,
-      price: price,
-      costPrice: costPrice,
-      quantity: quantity,
-      barcode: barcode,
-      imageUrl: imageUrl,
-      isActive: isActive,
-      isSynced: isSynced,
-      lastUpdated: lastUpdated,
-      createdAt: createdAt,
-      brandId: brandId, // Include brandId when converting to entity
-    );
-  }
+  factory ProductModel.fromMap(Map<String, dynamic> map) => ProductModel(
+    id: map['id'] as int?,
+    categoryId: map['category_id'] as int?,
+    brandId: map['brand_id'] as int?,
+    name: map['name'] ?? '',
+    sku: map['sku'],
+    price: (map['price'] ?? 0).toDouble(),
+    costPrice: map['cost_price'] != null
+        ? double.tryParse(map['cost_price'].toString())
+        : null,
+    quantity: map['quantity'] ?? 0,
+    barcode: map['barcode'],
+    imageUrl: map['image_url'],
+    isActive: (map['is_active'] ?? 1) == 1,
+    isSynced: (map['is_synced'] ?? 0) == 1,
+    lastUpdated: map['last_updated'] != null
+        ? DateTime.tryParse(map['last_updated'])
+        : null,
+    createdAt: map['created_at'] != null
+        ? DateTime.tryParse(map['created_at'])
+        : null,
+  );
 
-  factory ProductModel.fromMap(Map<String, dynamic> map) {
-    return ProductModel(
-      id: map['id'],
-      categoryId: map['category_id'],
-      name: map['name'],
-      sku: map['sku'],
-      price: map['price']?.toDouble() ?? 0.0,
-      costPrice: map['cost_price']?.toDouble(),
-      quantity: map['quantity'] ?? 0,
-      barcode: map['barcode'],
-      imageUrl: map['image_url'],
-      isActive: map['is_active'] ?? 1,
-      isSynced: map['is_synced'] ?? 0,
-      lastUpdated: map['last_updated'] != null
-          ? DateTime.parse(map['last_updated'])
-          : null,
-      createdAt: map['created_at'] != null
-          ? DateTime.parse(map['created_at'])
-          : null,
-      brandId: map['brand_id'], // Extract brand_id from the map
-    );
-  }
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'category_id': categoryId,
+    'brand_id': brandId,
+    'name': name,
+    'sku': sku,
+    'price': price,
+    'cost_price': costPrice,
+    'quantity': quantity,
+    'barcode': barcode,
+    'image_url': imageUrl,
+    'is_active': isActive ? 1 : 0,
+    'is_synced': isSynced ? 1 : 0,
+    'last_updated': lastUpdated?.toIso8601String(),
+    'created_at': createdAt?.toIso8601String(),
+  };
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'category_id': categoryId,
-      'name': name,
-      'sku': sku,
-      'price': price,
-      'cost_price': costPrice,
-      'quantity': quantity,
-      'barcode': barcode,
-      'image_url': imageUrl,
-      'is_active': isActive,
-      'is_synced': isSynced,
-      'last_updated': lastUpdated?.toIso8601String(),
-      'created_at': createdAt?.toIso8601String(),
-      'brand_id': brandId, // Add brand_id to the map for database operations
-    };
-  }
+  factory ProductModel.fromJson(String source) =>
+      ProductModel.fromMap(json.decode(source) as Map<String, dynamic>);
+
+  String toJson() => json.encode(toMap());
 }

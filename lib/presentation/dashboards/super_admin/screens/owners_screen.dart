@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
-import 'package:pos_desktop/presentation/widgets/app_button.dart';
-import 'package:pos_desktop/presentation/widgets/app_input.dart';
 
 class OwnersScreen extends StatefulWidget {
   const OwnersScreen({super.key});
@@ -44,85 +42,6 @@ class _OwnersScreenState extends State<OwnersScreen> {
     },
   ];
 
-  void _addOwnerDialog() {
-    final storeName = TextEditingController();
-    final ownerName = TextEditingController();
-    final email = TextEditingController();
-    final stores = TextEditingController(text: "1");
-
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("Add New Owner", style: AppText.h2),
-                const SizedBox(height: 14),
-                AppInput(
-                  controller: storeName,
-                  hint: "Store / Brand Name",
-                  icon: Icons.store_mall_directory_outlined,
-                ),
-                const SizedBox(height: 10),
-                AppInput(
-                  controller: ownerName,
-                  hint: "Owner Full Name",
-                  icon: Icons.person_outline,
-                ),
-                const SizedBox(height: 10),
-                AppInput(
-                  controller: email,
-                  hint: "Email",
-                  icon: Icons.email_outlined,
-                ),
-                const SizedBox(height: 10),
-                AppInput(
-                  controller: stores,
-                  hint: "Number of Stores",
-                  icon: Icons.numbers_outlined,
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AppButton(
-                      label: "Cancel",
-                      isPrimary: false,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 10),
-                    AppButton(
-                      label: "Add Owner",
-                      icon: Icons.check,
-                      onPressed: () {
-                        setState(() {
-                          owners.insert(0, {
-                            "name": storeName.text.trim(),
-                            "owner": ownerName.text.trim(),
-                            "email": email.text.trim(),
-                            "stores": int.tryParse(stores.text.trim()) ?? 1,
-                            "status": "Pending",
-                          });
-                        });
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Color _statusColor(String s) => switch (s) {
     "Active" => AppColors.success,
     "Pending" => AppColors.warning,
@@ -132,9 +51,9 @@ class _OwnersScreenState extends State<OwnersScreen> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Header row
           Row(
@@ -143,24 +62,6 @@ class _OwnersScreenState extends State<OwnersScreen> {
               Text(
                 "Owners Management",
                 style: AppText.h1.copyWith(color: AppColors.textDark),
-              ),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 280,
-                    child: AppInput(
-                      controller: searchCtrl,
-                      hint: "Search owner/store/email",
-                      icon: Icons.search,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  AppButton(
-                    label: "Add Owner",
-                    icon: Icons.add,
-                    onPressed: _addOwnerDialog,
-                  ),
-                ],
               ),
             ],
           ),

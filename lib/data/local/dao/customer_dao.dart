@@ -1,125 +1,58 @@
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/models/customer_model.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class CustomerDao {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final _dbHelper = DatabaseHelper();
 
-  // 🔹 GET ALL CUSTOMERS
-  Future<List<CustomerModel>> getCustomers({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      final data = await db.query('customers', orderBy: 'name ASC');
-      await db.close();
-      return data.map((e) => CustomerModel.fromMap(e)).toList();
-    } catch (e) {
-      print('❌ ERROR getting customers: $e');
-      rethrow;
-    }
+  Future<List<CustomerModel>> getAllCustomers(int storeId) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', storeId, 'store');
+    final result = await db.query('customers', orderBy: 'id DESC');
+    return result.map((e) => CustomerModel.fromMap(e)).toList();
   }
 
-  // 🔹 INSERT CUSTOMER
-  Future<int> insertCustomer({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required String name,
-    String? phone,
-    String? email,
-    String? address,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      final id = await db.insert('customers', {
-        'name': name,
-        'phone': phone,
-        'email': email,
-        'address': address,
-        'is_synced': 0,
-        'created_at': DateTime.now().toIso8601String(),
-        'last_updated': DateTime.now().toIso8601String(),
-      });
-      await db.close();
-      return id;
-    } catch (e) {
-      print('❌ ERROR inserting customer: $e');
-      rethrow;
-    }
+  Future<CustomerModel?> getCustomerById(int id) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    final result = await db.query(
+      'customers',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (result.isEmpty) return null;
+    return CustomerModel.fromMap(result.first);
   }
 
-  // 🔹 UPDATE CUSTOMER
-  Future<void> updateCustomer({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required int customerId,
-    required String name,
-    String? phone,
-    String? email,
-    String? address,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      await db.update(
-        'customers',
-        {
-          'name': name,
-          'phone': phone,
-          'email': email,
-          'address': address,
-          'last_updated': DateTime.now().toIso8601String(),
-        },
-        where: 'id = ?',
-        whereArgs: [customerId],
-      );
-      await db.close();
-    } catch (e) {
-      print('❌ ERROR updating customer: $e');
-      rethrow;
-    }
+  Future<int> insertCustomer(CustomerModel model) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    return await db.insert(
+      'customers',
+      model.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  // 🔹 DELETE CUSTOMER
-  Future<void> deleteCustomer({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required int customerId,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      await db.delete('customers', where: 'id = ?', whereArgs: [customerId]);
-      await db.close();
-    } catch (e) {
-      print('❌ ERROR deleting customer: $e');
-      rethrow;
-    }
+  Future<void> updateCustomer(CustomerModel model) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    await db.update(
+      'customers',
+      model.toMap(),
+      where: 'id = ?',
+      whereArgs: [model.id],
+    );
+  }
+
+  Future<void> deleteCustomer(int id) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<CustomerModel>> searchCustomers(String query) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    final result = await db.query(
+      'customers',
+      where: 'name LIKE ? OR phone LIKE ?',
+      whereArgs: ['%$query%', '%$query%'],
+    );
+    return result.map((e) => CustomerModel.fromMap(e)).toList();
   }
 }

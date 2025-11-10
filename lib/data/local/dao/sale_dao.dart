@@ -1,184 +1,74 @@
 import 'package:pos_desktop/data/local/database/database_helper.dart';
 import 'package:pos_desktop/data/models/sale_model.dart';
 import 'package:pos_desktop/data/models/sale_item_model.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class SaleDao {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final _dbHelper = DatabaseHelper();
 
-  // 🔹 CREATE SALE WITH ITEMS
-  Future<int> createSaleWithItems({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required double total,
-    required String paymentMethod,
-    required List<SaleItemModel> items,
-  }) async {
-    final db = await _dbHelper.openStoreDB(
-      ownerId,
-      ownerName,
-      storeId,
-      storeName,
-    );
+  Future<int> insertSale(SaleModel sale, List<SaleItemModel> items) async {
+    final db = await _dbHelper.openStoreDB(0, 'default', 0, 'store');
+    return await _dbHelper.executeWithRetry(() async {
+      final saleId = await db.insert(
+        'sales',
+        sale.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
 
-    try {
-      await db.execute('BEGIN TRANSACTION');
-
-      // Insert sale
-      final saleId = await db.insert('sales', {
-        'total': total,
-        'payment_method': paymentMethod,
-        'is_synced': 0,
-        'created_at': DateTime.now().toIso8601String(),
-        'last_updated': DateTime.now().toIso8601String(),
-      });
-
-      // Insert sale items
-      for (final item in items) {
-        await db.insert('sale_items', {
-          'sale_id': saleId,
-          'product_id': item.productId,
-          'quantity': item.quantity,
-          'price': item.price,
-          'total': item.total,
-          'is_synced': 0,
-          'last_updated': DateTime.now().toIso8601String(),
-        });
-
-        // Update product stock
-        final product = await db.query(
-          'products',
-          where: 'id = ?',
-          whereArgs: [item.productId],
-          limit: 1,
-        );
-
-        if (product.isNotEmpty) {
-          final currentStock = product.first['quantity'] as int;
-          final newStock = currentStock - item.quantity;
-          await db.update(
-            'products',
-            {'quantity': newStock},
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-        }
+      for (var item in items) {
+        await db.insert('sale_items', {...item.toMap(), 'sale_id': saleId});
       }
 
-      await db.execute('COMMIT');
-      await db.close();
       return saleId;
-    } catch (e) {
-      await db.execute('ROLLBACK');
-      await db.close();
-      print('❌ ERROR creating sale: $e');
-      rethrow;
-    }
+    });
   }
 
-  // 🔹 GET ALL SALES
-  Future<List<SaleModel>> getSales({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    int? limit,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      final data = await db.query(
-        'sales',
-        orderBy: 'created_at DESC',
-        limit: limit,
-      );
-      await db.close();
-      return data.map((e) => SaleModel.fromMap(e)).toList();
-    } catch (e) {
-      print('❌ ERROR getting sales: $e');
-      rethrow;
-    }
+  Future<List<SaleModel>> getAllSales(int storeId) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', storeId, 'store');
+    final result = await db.query('sales', orderBy: 'id DESC');
+    return result.map((e) => SaleModel.fromMap(e)).toList();
   }
 
-  // 🔹 GET SALE ITEMS
-  Future<List<SaleItemModel>> getSaleItems({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required int saleId,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
-      final data = await db.query(
-        'sale_items',
-        where: 'sale_id = ?',
-        whereArgs: [saleId],
-      );
-      await db.close();
-      return data.map((e) => SaleItemModel.fromMap(e)).toList();
-    } catch (e) {
-      print('❌ ERROR getting sale items: $e');
-      rethrow;
-    }
+  Future<SaleModel?> getSaleById(int id) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    final result = await db.query('sales', where: 'id = ?', whereArgs: [id]);
+    if (result.isEmpty) return null;
+    return SaleModel.fromMap(result.first);
   }
 
-  // 🔹 GET SALES SUMMARY
-  Future<Map<String, dynamic>> getSalesSummary({
-    required int storeId,
-    required String ownerName,
-    required int ownerId,
-    required String storeName,
-    required DateTime startDate,
-    required DateTime endDate,
-  }) async {
-    try {
-      final db = await _dbHelper.openStoreDB(
-        ownerId,
-        ownerName,
-        storeId,
-        storeName,
-      );
+  Future<List<SaleItemModel>> getItemsBySale(int saleId) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    final result = await db.query(
+      'sale_items',
+      where: 'sale_id = ?',
+      whereArgs: [saleId],
+    );
+    return result.map((e) => SaleItemModel.fromMap(e)).toList();
+  }
 
-      final totalSalesResult = await db.rawQuery(
-        '''
-        SELECT COUNT(*) as count, COALESCE(SUM(total), 0) as total 
-        FROM sales 
-        WHERE date(created_at) BETWEEN date(?) AND date(?)
-      ''',
-        [startDate.toIso8601String(), endDate.toIso8601String()],
-      );
+  Future<void> deleteSale(int id) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    await db.delete('sale_items', where: 'sale_id = ?', whereArgs: [id]);
+    await db.delete('sales', where: 'id = ?', whereArgs: [id]);
+  }
 
-      final paymentMethodsResult = await db.rawQuery(
-        '''
-        SELECT payment_method, COUNT(*) as count, COALESCE(SUM(total), 0) as total 
-        FROM sales 
-        WHERE date(created_at) BETWEEN date(?) AND date(?)
-        GROUP BY payment_method
-      ''',
-        [startDate.toIso8601String(), endDate.toIso8601String()],
-      );
+  Future<void> markSaleSynced(int id) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', 0, 'store');
+    await db.update(
+      'sales',
+      {'is_synced': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 
-      await db.close();
-
-      return {
-        'total_sales': totalSalesResult.first['total'] ?? 0,
-        'sales_count': totalSalesResult.first['count'] ?? 0,
-        'payment_methods': paymentMethodsResult,
-      };
-    } catch (e) {
-      print('❌ ERROR getting sales summary: $e');
-      rethrow;
-    }
+  Future<List<SaleModel>> getUnsyncedSales(int storeId) async {
+    final db = await _dbHelper.openStoreDB(0, 'unknown', storeId, 'store');
+    final result = await db.query(
+      'sales',
+      where: 'is_synced = 0',
+      orderBy: 'id DESC',
+    );
+    return result.map((e) => SaleModel.fromMap(e)).toList();
   }
 }

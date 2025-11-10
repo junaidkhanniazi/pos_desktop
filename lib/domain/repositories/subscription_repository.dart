@@ -1,4 +1,4 @@
-import 'package:pos_desktop/domain/entities/subscription_entity.dart';
+import 'package:pos_desktop/domain/entities/online/subscription_entity.dart';
 
 abstract class SubscriptionRepository {
   Future<int> addSubscription(SubscriptionEntity subscription);

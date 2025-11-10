@@ -1,55 +1,78 @@
-import 'package:pos_desktop/domain/entities/subscription_entity.dart';
+import 'dart:convert';
+import 'package:pos_desktop/domain/entities/online/subscription_entity.dart';
 
-class SubscriptionModel {
-  final int? id;
-  final int ownerId;
-  final int? subscriptionPlanId;
-  final String? subscriptionPlanName;
-  final String status; // inactive, active, expired, cancelled
-  final String? receiptImage;
-  final String? paymentDate;
-  final double? subscriptionAmount;
-  final String? subscriptionStartDate;
-  final String? subscriptionEndDate;
-  final String? createdAt;
-  final String? updatedAt;
+class SubscriptionModel extends SubscriptionEntity {
+  const SubscriptionModel({
+    required int id,
+    required int ownerId,
+    required int subscriptionPlanId,
+    required String subscriptionPlanName,
+    required String status,
+    String? receiptImage,
+    DateTime? paymentDate,
+    required double subscriptionAmount,
+    DateTime? subscriptionStartDate,
+    DateTime? subscriptionEndDate,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : super(
+         id: id,
+         ownerId: ownerId,
+         subscriptionPlanId: subscriptionPlanId,
+         subscriptionPlanName: subscriptionPlanName,
+         status: status,
+         receiptImage: receiptImage,
+         paymentDate: paymentDate,
+         subscriptionAmount: subscriptionAmount,
+         subscriptionStartDate: subscriptionStartDate,
+         subscriptionEndDate: subscriptionEndDate,
+         createdAt: createdAt,
+         updatedAt: updatedAt,
+       );
 
-  SubscriptionModel({
-    this.id,
-    required this.ownerId,
-    this.subscriptionPlanId,
-    this.subscriptionPlanName,
-    this.status = 'inactive',
-    this.receiptImage,
-    this.paymentDate,
-    this.subscriptionAmount,
-    this.subscriptionStartDate,
-    this.subscriptionEndDate,
-    this.createdAt,
-    this.updatedAt,
-  });
+  factory SubscriptionModel.fromEntity(SubscriptionEntity e) =>
+      SubscriptionModel(
+        id: e.id,
+        ownerId: e.ownerId,
+        subscriptionPlanId: e.subscriptionPlanId,
+        subscriptionPlanName: e.subscriptionPlanName,
+        status: e.status,
+        receiptImage: e.receiptImage,
+        paymentDate: e.paymentDate,
+        subscriptionAmount: e.subscriptionAmount,
+        subscriptionStartDate: e.subscriptionStartDate,
+        subscriptionEndDate: e.subscriptionEndDate,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+      );
 
-  // ------------------------------
-  // 🔹 Map <-> Model converters
-  // ------------------------------
-  factory SubscriptionModel.fromMap(Map<String, dynamic> map) {
-    return SubscriptionModel(
-      id: map['id'] as int?,
-      ownerId: map['owner_id'] as int,
-      subscriptionPlanId: map['subscription_plan_id'] as int?,
-      subscriptionPlanName: map['subscription_plan_name']?.toString(),
-      status: map['status'] ?? 'inactive',
-      receiptImage: map['receipt_image']?.toString(),
-      paymentDate: map['payment_date']?.toString(),
-      subscriptionAmount: map['subscription_amount'] != null
-          ? double.tryParse(map['subscription_amount'].toString())
-          : null,
-      subscriptionStartDate: map['subscription_start_date']?.toString(),
-      subscriptionEndDate: map['subscription_end_date']?.toString(),
-      createdAt: map['created_at']?.toString(),
-      updatedAt: map['updated_at']?.toString(),
-    );
-  }
+  factory SubscriptionModel.fromMap(Map<String, dynamic> map) =>
+      SubscriptionModel(
+        id: map['id'] ?? 0,
+        ownerId: map['owner_id'] ?? 0,
+        subscriptionPlanId: map['subscription_plan_id'] ?? 0,
+        subscriptionPlanName: map['subscription_plan_name'] ?? '',
+        status: map['status'] ?? '',
+        receiptImage: map['receipt_image'],
+        paymentDate: map['payment_date'] != null
+            ? DateTime.tryParse(map['payment_date'])
+            : null,
+        subscriptionAmount:
+            double.tryParse((map['subscription_amount'] ?? 0).toString()) ??
+            0.0,
+        subscriptionStartDate: map['subscription_start_date'] != null
+            ? DateTime.tryParse(map['subscription_start_date'])
+            : null,
+        subscriptionEndDate: map['subscription_end_date'] != null
+            ? DateTime.tryParse(map['subscription_end_date'])
+            : null,
+        createdAt: map['created_at'] != null
+            ? DateTime.tryParse(map['created_at'])
+            : null,
+        updatedAt: map['updated_at'] != null
+            ? DateTime.tryParse(map['updated_at'])
+            : null,
+      );
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -58,81 +81,16 @@ class SubscriptionModel {
     'subscription_plan_name': subscriptionPlanName,
     'status': status,
     'receipt_image': receiptImage,
-    'payment_date': paymentDate,
+    'payment_date': paymentDate?.toIso8601String(),
     'subscription_amount': subscriptionAmount,
-    'subscription_start_date': subscriptionStartDate,
-    'subscription_end_date': subscriptionEndDate,
-    'created_at': createdAt,
-    'updated_at': updatedAt,
+    'subscription_start_date': subscriptionStartDate?.toIso8601String(),
+    'subscription_end_date': subscriptionEndDate?.toIso8601String(),
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
   };
 
-  // ------------------------------
-  // 🔹 Status Helpers
-  // ------------------------------
-  bool get isActive => status == 'active';
-  bool get isInactive => status == 'inactive';
-  bool get isExpired {
-    if (subscriptionEndDate == null) return false;
-    final end = DateTime.tryParse(subscriptionEndDate!);
-    if (end == null) return false;
-    return end.isBefore(DateTime.now());
-  }
+  factory SubscriptionModel.fromJson(String source) =>
+      SubscriptionModel.fromMap(json.decode(source) as Map<String, dynamic>);
 
-  bool get isExpiringSoon {
-    if (subscriptionEndDate == null) return false;
-    final end = DateTime.tryParse(subscriptionEndDate!);
-    if (end == null) return false;
-    final days = end.difference(DateTime.now()).inDays;
-    return days <= 7 && days > 0;
-  }
-
-  // ------------------------------
-  // 🔹 Convert to SubscriptionEntity
-  // ------------------------------
-  SubscriptionEntity toEntity() {
-    return SubscriptionEntity(
-      id: id?.toString() ?? '',
-      ownerId: ownerId.toString(),
-      subscriptionPlanId: subscriptionPlanId?.toString(),
-      subscriptionPlanName: subscriptionPlanName,
-      status: status,
-      receiptImage: receiptImage,
-      paymentDate: paymentDate != null ? DateTime.tryParse(paymentDate!) : null,
-      subscriptionAmount: subscriptionAmount,
-      subscriptionStartDate: subscriptionStartDate != null
-          ? DateTime.tryParse(subscriptionStartDate!)
-          : null,
-      subscriptionEndDate: subscriptionEndDate != null
-          ? DateTime.tryParse(subscriptionEndDate!)
-          : null,
-      createdAt: createdAt != null
-          ? DateTime.tryParse(createdAt!)
-          : DateTime.now(),
-      updatedAt: updatedAt != null
-          ? DateTime.tryParse(updatedAt!)
-          : DateTime.now(),
-    );
-  }
-
-  // ------------------------------
-  // 🔹 Create from Entity
-  // ------------------------------
-  static SubscriptionModel fromEntity(SubscriptionEntity e) {
-    return SubscriptionModel(
-      id: int.tryParse(e.id),
-      ownerId: int.tryParse(e.ownerId) ?? 0,
-      subscriptionPlanId: e.subscriptionPlanId != null
-          ? int.tryParse(e.subscriptionPlanId!)
-          : null,
-      subscriptionPlanName: e.subscriptionPlanName,
-      status: e.status,
-      receiptImage: e.receiptImage,
-      paymentDate: e.paymentDate?.toIso8601String(),
-      subscriptionAmount: e.subscriptionAmount,
-      subscriptionStartDate: e.subscriptionStartDate?.toIso8601String(),
-      subscriptionEndDate: e.subscriptionEndDate?.toIso8601String(),
-      createdAt: e.createdAt?.toIso8601String(),
-      updatedAt: e.updatedAt?.toIso8601String(),
-    );
-  }
+  String toJson() => json.encode(toMap());
 }
