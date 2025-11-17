@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/presentation/controllers/auth_controller.dart';
+import 'package:pos_desktop/core/routes/app_routes.dart';
 
 class Sidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
-  final _logoutController = AuthController(); // ✅ use controller
-
+  final _logoutController = AuthController();
   Sidebar({
     super.key,
     required this.selectedIndex,
@@ -21,10 +21,7 @@ class Sidebar extends StatelessWidget {
       {'icon': Icons.group_add_rounded, 'label': 'Owner Requests'},
       {'icon': Icons.people_alt_rounded, 'label': 'Owners'},
       {'icon': Icons.bar_chart_rounded, 'label': 'Reports'},
-      {
-        'icon': Icons.subscriptions_rounded,
-        'label': 'Subscriptions',
-      }, // ✅ new screen
+      {'icon': Icons.subscriptions_rounded, 'label': 'Subscriptions'},
       {'icon': Icons.settings_rounded, 'label': 'Settings'},
     ];
 
@@ -103,7 +100,12 @@ class Sidebar extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            onTap: () => _logoutController.logout(), // ✅ clean call
+            onTap: () {
+              _logoutController.logout();
+              Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+            }, // ✅ clean call
           ),
           const SizedBox(height: 10),
         ],

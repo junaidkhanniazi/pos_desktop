@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:get/get.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/core/utils/toast_helper.dart';
-import 'package:pos_desktop/data/repositories_impl/owner_repository_impl.dart';
 import 'package:pos_desktop/domain/entities/online/subscription_plan_entity.dart';
+import 'package:pos_desktop/presentation/controllers/owner_onboarding_controller.dart';
 import 'package:pos_desktop/presentation/widgets/app_button.dart';
 import 'package:pos_desktop/presentation/widgets/app_loader.dart';
 
@@ -24,6 +25,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isSubmitting = false;
   bool _isLoadingData = true;
   Map<String, dynamic>? _tempOwnerData;
+  final OwnerOnboardingController controller = Get.find();
 
   @override
   void initState() {
@@ -50,7 +52,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
         type: FileType.image,
       );
       if (result != null && result.files.single.path != null) {
-        setState(() => _receiptImage = File(result.files.single.path!));
+        final file = File(result.files.single.path!);
+
+        setState(() => _receiptImage = file);
+
+        // ✅ keep the controller in sync
+        controller.receiptImage = file;
       }
     } catch (e) {
       AppToast.show(
@@ -62,56 +69,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _submitRequest() async {
-    if (_receiptImage == null) {
-      AppToast.show(
-        context,
-        message: 'Please upload your payment receipt first',
-        type: ToastType.warning,
-      );
-      return;
-    }
-
-    if (_tempOwnerData == null) {
-      AppToast.show(
-        context,
-        message:
-            'Owner data not found. Please restart the registration process.',
-        type: ToastType.error,
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      await OwnerRepositoryImpl().updateOwnerSubscription(
-        ownerId: _tempOwnerData!['email']
-            .toString(), // backend identifies owner via email
-        subscriptionPlan: widget.selectedPlan.name,
-        receiptImage: _receiptImage!.path,
-        subscriptionAmount: widget.selectedPlan.price,
-      );
-
-      await AuthStorageHelper.clearTempOwnerData();
-
-      AppToast.show(
-        context,
-        message: 'Payment submitted for admin approval',
-        type: ToastType.success,
-      );
-
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
-      }
-    } catch (e) {
-      AppToast.show(
-        context,
-        message: 'Submission failed: $e',
-        type: ToastType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
+    await controller.submitFullRegistration(context);
   }
 
   @override

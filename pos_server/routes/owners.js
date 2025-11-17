@@ -32,90 +32,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // =============================
-// 🟢 Register Owner (with store data from client)
-// =============================
-router.post("/register", async (req, res) => {
-  try {
-    // ✅ accept both camelCase & snake_case
-    const shopName = req.body.shopName || req.body.shop_name;
-    const ownerName = req.body.ownerName || req.body.owner_name;
-    const { email, password, contact } = req.body;
-
-    // ✅ store info from Flutter
-    const storeName = req.body.storeName || req.body.store_name;
-    const folderPath = req.body.folderPath || req.body.folder_path;
-    const dbPath = req.body.dbPath || req.body.db_path;
-
-    // 🧩 Validate input
-    if (
-      !shopName ||
-      !ownerName ||
-      !email ||
-      !password ||
-      !contact ||
-      !storeName ||
-      !folderPath ||
-      !dbPath
-    ) {
-      return res.status(400).json({
-        error:
-          "Missing required fields (shopName, ownerName, email, password, contact, storeName, folderPath, dbPath)",
-      });
-    }
-
-    const conn = await pool.getConnection();
-    await conn.beginTransaction();
-
-    // 🔹 Check if owner already exists
-    const [existing] = await conn.query(
-      "SELECT id FROM owners WHERE email = ?",
-      [email]
-    );
-    if (existing.length > 0) {
-      await conn.release();
-      return res.status(409).json({ error: "Email already registered" });
-    }
-
-    // 🔹 Insert new owner
-    const [ownerResult] = await conn.query(
-      `INSERT INTO owners 
-         (shop_name, owner_name, email, password, contact, status, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', 0, NOW(), NOW())`,
-      [shopName, ownerName, email, password, contact]
-    );
-
-    const ownerId = ownerResult.insertId;
-
-    // 🔹 Insert store (values from Flutter)
-    const [storeResult] = await conn.query(
-      `INSERT INTO stores 
-         (ownerId, storeName, folderPath, dbPath, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, NOW(), NOW())`,
-      [ownerId, storeName, folderPath, dbPath]
-    );
-
-    await conn.commit();
-    conn.release();
-
-    res.status(201).json({
-      success: true,
-      message: "Owner and store created successfully",
-      ownerId,
-      store: {
-        id: storeResult.insertId,
-        ownerId,
-        storeName,
-        folderPath,
-        dbPath,
-      },
-    });
-  } catch (err) {
-    console.error("❌ Error in /register:", err);
-    res.status(500).json({ error: "Server error during registration" });
-  }
-});
-
-// =============================
 // 🟡 Upload Subscription Receipt (Upgrade Plan)
 // =============================
 router.post(
@@ -270,24 +186,78 @@ router.get("/subscriptions/owner/:ownerId", async (req, res) => {
 // =============================
 // 🟢 Activate Owner Account (Simplified)
 // =============================
-router.post("/activate", async (req, res) => {
+// router.post("/activate", async (req, res) => {
+//   try {
+//     const ownerId = req.body.ownerId || req.body.owner_id;
+//     const durationDays =
+//       parseInt(req.body.durationDays || req.body.duration_days) || 30;
+
+//     if (!ownerId) {
+//       return res.status(400).json({ error: "Missing owner_id" });
+//     }
+
+//     // 🔹 Fetch latest subscription
+//     const [subs] = await pool.query(
+//       `SELECT id, subscription_start_date
+//        FROM subscriptions
+//        WHERE owner_id = ?
+//        ORDER BY id DESC
+//        LIMIT 1`,
+//       [ownerId]
+//     );
+
+//     if (!subs.length) {
+//       return res
+//         .status(404)
+//         .json({ error: "No subscription found for this owner" });
+//     }
+
+//     const sub = subs[0];
+//     const startDate = new Date(sub.subscription_start_date || new Date());
+//     const endDate = new Date(startDate);
+//     endDate.setDate(startDate.getDate() + durationDays);
+
+//     // ✅ Activate subscription
+//     await pool.query(
+//       `UPDATE subscriptions
+//        SET status = 'active', subscription_end_date = ?, updated_at = NOW()
+//        WHERE id = ?`,
+//       [endDate, sub.id]
+//     );
+
+//     // ✅ Activate owner
+//     await pool.query(
+//       `UPDATE owners
+//        SET status = 'active', is_active = 1, updated_at = NOW()
+//        WHERE id = ?`,
+//       [ownerId]
+//     );
+
+//     res.json({
+//       success: true,
+//       message: `Owner ${ownerId} activated successfully for ${durationDays} days.`,
+//     });
+//   } catch (err) {
+//     console.error("❌ Error activating owner:", err);
+//     res.status(500).json({ error: "Server error during owner activation" });
+//   }
+// });
+
+// ✅ Activate owner by ID (matches Flutter PUT /owners/:id/activate)
+router.put("/:id/activate", async (req, res) => {
   try {
-    const ownerId = req.body.ownerId || req.body.owner_id;
+    const { id } = req.params;
     const durationDays =
       parseInt(req.body.durationDays || req.body.duration_days) || 30;
 
-    if (!ownerId) {
-      return res.status(400).json({ error: "Missing owner_id" });
-    }
-
-    // 🔹 Fetch latest subscription
+    // ✅ Fetch latest subscription for this owner
     const [subs] = await pool.query(
-      `SELECT id, subscription_start_date 
-       FROM subscriptions 
-       WHERE owner_id = ? 
-       ORDER BY id DESC 
+      `SELECT id, subscription_start_date
+       FROM subscriptions
+       WHERE owner_id = ?
+       ORDER BY id DESC
        LIMIT 1`,
-      [ownerId]
+      [id]
     );
 
     if (!subs.length) {
@@ -303,23 +273,27 @@ router.post("/activate", async (req, res) => {
 
     // ✅ Activate subscription
     await pool.query(
-      `UPDATE subscriptions 
-       SET status = 'active', subscription_end_date = ?, updated_at = NOW()
+      `UPDATE subscriptions
+       SET status = 'active',
+           subscription_end_date = ?,
+           updated_at = NOW()
        WHERE id = ?`,
       [endDate, sub.id]
     );
 
     // ✅ Activate owner
     await pool.query(
-      `UPDATE owners 
-       SET status = 'active', is_active = 1, updated_at = NOW()
+      `UPDATE owners
+       SET status = 'active',
+           is_active = 1,
+           updated_at = NOW()
        WHERE id = ?`,
-      [ownerId]
+      [id]
     );
 
     res.json({
       success: true,
-      message: `Owner ${ownerId} activated successfully for ${durationDays} days.`,
+      message: `Owner ${id} activated successfully for ${durationDays} days.`,
     });
   } catch (err) {
     console.error("❌ Error activating owner:", err);

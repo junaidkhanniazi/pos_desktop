@@ -1,7 +1,5 @@
 class OwnerEntity {
   final int id;
-  final int? superAdminId;
-  final String shopName;
   final String ownerName;
   final String email;
   final String password;
@@ -13,8 +11,6 @@ class OwnerEntity {
 
   const OwnerEntity({
     required this.id,
-    this.superAdminId,
-    required this.shopName,
     required this.ownerName,
     required this.email,
     required this.password,
@@ -40,8 +36,6 @@ class OwnerEntity {
   }) {
     return OwnerEntity(
       id: id ?? this.id,
-      superAdminId: superAdminId ?? this.superAdminId,
-      shopName: shopName ?? this.shopName,
       ownerName: ownerName ?? this.ownerName,
       email: email ?? this.email,
       password: password ?? this.password,
@@ -56,8 +50,6 @@ class OwnerEntity {
   factory OwnerEntity.fromMap(Map<String, dynamic> map) {
     return OwnerEntity(
       id: map['id'] ?? 0,
-      superAdminId: map['super_admin_id'],
-      shopName: map['shop_name'] ?? '',
       ownerName: map['owner_name'] ?? '',
       email: map['email'] ?? '',
       password: map['password'] ?? '',
@@ -75,8 +67,6 @@ class OwnerEntity {
 
   Map<String, dynamic> toMap() => {
     'id': id,
-    'super_admin_id': superAdminId,
-    'shop_name': shopName,
     'owner_name': ownerName,
     'email': email,
     'password': password,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:pos_desktop/core/routes/app_routes.dart';
 import 'package:pos_desktop/core/theme/app_colors.dart';
 import 'package:pos_desktop/core/theme/app_text_styles.dart';
 import 'package:pos_desktop/presentation/controllers/auth_controller.dart';
@@ -106,7 +107,12 @@ class OwnerSidebar extends StatelessWidget {
 
           // 🔹 Logout Button
           InkWell(
-            onTap: () => _logoutController.logout(),
+            onTap: () {
+              _logoutController.logout();
+              Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+            },
             borderRadius: BorderRadius.circular(12),
             child: Container(
               margin: const EdgeInsets.all(16),

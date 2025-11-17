@@ -9,7 +9,7 @@ class SubscriptionUseCase {
 
   SubscriptionUseCase(this._subscriptionRepo, this._planRepo);
 
-  // Subscriptions
+  // 🔹 Owner subscriptions
   Future<int> add(SubscriptionEntity entity) =>
       _subscriptionRepo.addSubscription(entity);
   Future<SubscriptionEntity?> getActive(String ownerId) =>
@@ -20,6 +20,10 @@ class SubscriptionUseCase {
       _subscriptionRepo.updateStatus(id, status);
   Future<void> markExpired() => _subscriptionRepo.markExpiredSubscriptions();
 
-  // Plans
+  // 🔹 Admin plans
   Future<List<SubscriptionPlanEntity>> getPlans() => _planRepo.getActivePlans();
+  Future<void> addPlan(Map<String, dynamic> data) => _planRepo.addPlan(data);
+  Future<void> updatePlan(String id, Map<String, dynamic> data) =>
+      _planRepo.updatePlan(id, data);
+  Future<void> deletePlan(String id) => _planRepo.deletePlan(id);
 }

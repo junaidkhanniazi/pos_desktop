@@ -4,8 +4,6 @@ import 'package:pos_desktop/domain/entities/online/owner_entity.dart';
 class OwnerModel extends OwnerEntity {
   const OwnerModel({
     required int id,
-    int? superAdminId,
-    required String shopName,
     required String ownerName,
     required String email,
     required String password,
@@ -16,8 +14,6 @@ class OwnerModel extends OwnerEntity {
     DateTime? updatedAt,
   }) : super(
          id: id,
-         superAdminId: superAdminId,
-         shopName: shopName,
          ownerName: ownerName,
          email: email,
          password: password,
@@ -30,8 +26,6 @@ class OwnerModel extends OwnerEntity {
 
   factory OwnerModel.fromEntity(OwnerEntity e) => OwnerModel(
     id: e.id,
-    superAdminId: e.superAdminId,
-    shopName: e.shopName,
     ownerName: e.ownerName,
     email: e.email,
     password: e.password,
@@ -44,8 +38,6 @@ class OwnerModel extends OwnerEntity {
 
   factory OwnerModel.fromMap(Map<String, dynamic> map) => OwnerModel(
     id: map['id'] ?? 0,
-    superAdminId: map['super_admin_id'],
-    shopName: map['shop_name'] ?? '',
     ownerName: map['owner_name'] ?? '',
     email: map['email'] ?? '',
     password: map['password'] ?? '',
@@ -62,8 +54,6 @@ class OwnerModel extends OwnerEntity {
 
   Map<String, dynamic> toMap() => {
     'id': id,
-    'super_admin_id': superAdminId,
-    'shop_name': shopName,
     'owner_name': ownerName,
     'email': email,
     'password': password,

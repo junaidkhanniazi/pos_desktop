@@ -4,8 +4,6 @@ import 'package:pos_desktop/core/storage/storage_service.dart';
 import 'package:pos_desktop/core/storage/shared_prefs_storage.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/data/models/store_model.dart';
-import 'package:pos_desktop/data/models/subscription_model.dart';
-import 'package:pos_desktop/data/remote/api/sync_api.dart';
 
 class AuthStorageHelper {
   static const _keyIsLoggedIn = 'is_logged_in';
@@ -23,9 +21,9 @@ class AuthStorageHelper {
 
   // ======================================================
   // 🔹 LOGIN MANAGEMENT
-  // ======================================================
+  // ======================================================a
 
-  static Future<void> saveLogin({
+  Future<void> saveLogin({
     required AuthRole role,
     required String email,
     String? ownerId,
@@ -60,123 +58,9 @@ class AuthStorageHelper {
   static Future<String?> getAdminId() => _storage.read(_keyAdminId);
   static Future<String?> getStaffRole() => _storage.read(_keyStaffRole);
 
-  static Future<void> logout() async {
+  Future<void> logout() async {
     await _storage.clear();
     _logger.w("🚪 User logged out and preferences cleared");
-  }
-
-  // ======================================================
-  // 🔹 SUBSCRIPTION STATUS (Online version)
-  // ======================================================
-  static Future<SubscriptionModel?> _fetchActiveSubscriptionOnline(
-    String ownerId,
-  ) async {
-    try {
-      final response = await SyncApi.get("owners/subscriptions/owner/$ownerId");
-      if (response.isEmpty) return null;
-      return SubscriptionModel.fromMap(response.first);
-    } catch (e) {
-      _logger.e('❌ Error fetching subscription from server: $e');
-      return null;
-    }
-  }
-
-  static Future<bool> isSubscriptionExpired() async {
-    try {
-      final ownerId = await getOwnerId();
-      if (ownerId == null) return true;
-
-      final sub = await _fetchActiveSubscriptionOnline(ownerId);
-      if (sub == null) return true;
-
-      return sub.isExpired;
-    } catch (e) {
-      _logger.e("❌ Subscription check failed: $e");
-      return true;
-    }
-  }
-
-  // static Future<Map<String, dynamic>> getSubscriptionStatus() async {
-  //   final ownerId = await getOwnerId();
-  //   if (ownerId == null) {
-  //     return {'isExpired': true, 'message': 'Owner ID not found'};
-  //   }
-
-  //   final sub = await _fetchActiveSubscriptionOnline(ownerId);
-  //   if (sub == null) {
-  //     return {'isExpired': true, 'message': 'No active subscription'};
-  //   }
-
-  //   final endDate = sub.subscriptionEndDate != null
-  //       ? DateTime.tryParse(sub.subscriptionEndDate!)
-  //       : null;
-
-  //   return {
-  //     'isExpired': sub.isExpired,
-  //     'isExpiringSoon': sub.isExpiringSoon,
-  //     'endDate': sub.subscriptionEndDate,
-  //     'daysLeft': endDate != null
-  //         ? endDate.difference(DateTime.now()).inDays
-  //         : 0,
-  //     'message': sub.isExpired
-  //         ? 'Subscription expired'
-  //         : sub.isExpiringSoon
-  //         ? 'Subscription expiring soon'
-  //         : 'Subscription active',
-  //   };
-  // }
-
-  static Future<Map<String, dynamic>> getSubscriptionStatus() async {
-    final ownerId = await getOwnerId();
-    if (ownerId == null) {
-      return {'isExpired': true, 'message': 'Owner ID not found'};
-    }
-
-    final sub = await _fetchActiveSubscriptionOnline(ownerId);
-    if (sub == null) {
-      return {'isExpired': true, 'message': 'No active subscription'};
-    }
-
-    // ✅ sub.subscriptionEndDate is already a DateTime?
-    final endDate = sub.subscriptionEndDate;
-
-    return {
-      'isExpired': sub.isExpired,
-      'isExpiringSoon': sub.isExpiringSoon,
-      'endDate': endDate,
-      'daysLeft': endDate != null
-          ? endDate.difference(DateTime.now()).inDays
-          : 0,
-      'message': sub.isExpired
-          ? 'Subscription expired'
-          : sub.isExpiringSoon
-          ? 'Subscription expiring soon'
-          : 'Subscription active',
-    };
-  }
-
-  static Future<bool> checkAndHandleExpiredSubscription() async {
-    try {
-      final loggedIn = await isLoggedIn();
-      if (!loggedIn) return false;
-
-      final role = await getRole();
-      if (role != AuthRole.owner) {
-        _logger.i('✅ Skipping subscription check for role: $role');
-        return false;
-      }
-
-      if (await isSubscriptionExpired()) {
-        await logout();
-        _logger.w('⚠️ Auto-logged out due to expired subscription');
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      _logger.e('❌ Error during subscription check: $e');
-      return false;
-    }
   }
 
   // ======================================================
@@ -221,11 +105,5 @@ class AuthStorageHelper {
     final id = await getCurrentStoreId();
     final name = await getCurrentStoreName();
     _logger.i('🔍 CURRENT STORE DEBUG:\n   ID: $id\n   Name: $name');
-  }
-
-  static Future<void> clearCurrentStore() async {
-    await _storage.remove(_keyCurrentStoreId);
-    await _storage.remove(_keyCurrentStoreName);
-    _logger.i("🗑️ Cleared current store selection");
   }
 }

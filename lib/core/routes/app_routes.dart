@@ -6,6 +6,7 @@ import 'package:pos_desktop/presentation/dashboards/inventory_manager/inventory_
 import 'package:pos_desktop/presentation/dashboards/super_admin/super_admin_dashboard.dart';
 import 'package:pos_desktop/presentation/dashboards/owner/owner_dashboard.dart';
 import 'package:pos_desktop/presentation/screens/login_screen.dart';
+import 'package:pos_desktop/presentation/screens/owner_signup_screen.dart';
 import 'package:pos_desktop/presentation/screens/splash_screen.dart';
 import 'package:pos_desktop/presentation/screens/subscription_plans_screen.dart';
 import 'package:pos_desktop/presentation/screens/payment_screen.dart';
@@ -34,8 +35,8 @@ class AppRouter {
       case AppRoutes.login:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
 
-      // case AppRoutes.ownerSignup:
-      //   return MaterialPageRoute(builder: (_) => const OwnerSignupScreen());
+      case AppRoutes.ownerSignup:
+        return MaterialPageRoute(builder: (_) => const OwnerSignupScreen());
 
       case AppRoutes.subscriptionPlans:
         // ✅ No longer require arguments - will fetch from temp storage

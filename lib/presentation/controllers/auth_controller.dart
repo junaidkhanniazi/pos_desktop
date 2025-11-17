@@ -2,13 +2,13 @@ import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 
 import 'package:pos_desktop/core/errors/exception_handler.dart';
-import 'package:pos_desktop/core/storage/auth_storage.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/domain/usecases/auth_usecase.dart';
 
 class AuthController extends GetxController {
   final AuthUseCase _authUseCase = Get.find<AuthUseCase>();
-  final AuthStorage _authStorage = Get.find<AuthStorage>();
+  final AuthStorageHelper _authStorage = AuthStorageHelper();
   final Logger _logger = Logger();
 
   final email = ''.obs;
@@ -42,7 +42,8 @@ class AuthController extends GetxController {
       }
 
       currentRole.value = role;
-      await _authStorage.saveSession(role.name, email.value);
+
+      // await _authStorage.saveLogin(role: role, email: email.value);
 
       _logger.i('✅ Logged in as ${role.name}');
       Get.snackbar('Login Successful', 'Welcome, ${role.name}');
@@ -51,16 +52,21 @@ class AuthController extends GetxController {
     } catch (e) {
       final failure = ExceptionHandler.handle(e);
       errorMessage.value = failure.message;
+
       _logger.e('❌ Login error: $e');
-      Get.snackbar('Login Error', failure.message);
+
+      if (failure.message.contains('subscription')) {
+        Get.snackbar('Subscription Inactive', failure.message);
+      } else {
+        Get.snackbar('Login Error', failure.message);
+      }
+
       return null;
-    } finally {
-      isLoading.value = false;
     }
   }
 
   Future<void> logout() async {
-    await _authStorage.clearSession();
+    await _authStorage.logout();
     currentRole.value = null;
     email.value = '';
     password.value = '';

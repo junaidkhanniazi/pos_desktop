@@ -1,5 +1,4 @@
 import 'package:pos_desktop/domain/entities/online/owner_entity.dart';
-import 'package:pos_desktop/domain/entities/online/subscription_entity.dart';
 import 'package:pos_desktop/domain/repositories/owner_repository.dart';
 
 class OwnerUseCase {
@@ -13,6 +12,4 @@ class OwnerUseCase {
 
   Future<List<OwnerEntity>> getAll() => _repository.getAllOwners();
   Future<List<OwnerEntity>> getPending() => _repository.getPendingOwners();
-  Future<SubscriptionEntity?> getSubscription(String ownerId) =>
-      _repository.getOwnerSubscription(ownerId);
 }

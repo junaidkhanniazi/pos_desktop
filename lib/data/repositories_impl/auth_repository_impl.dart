@@ -1,4 +1,7 @@
 import 'package:logger/logger.dart';
+import 'package:pos_desktop/core/errors/exception_handler.dart';
+import 'package:pos_desktop/core/errors/failure.dart';
+import 'package:pos_desktop/core/utils/auth_storage_helper.dart';
 import 'package:pos_desktop/data/remote/api/sync_api.dart';
 import 'package:pos_desktop/domain/entities/auth_role.dart';
 import 'package:pos_desktop/domain/repositories/auth_repository.dart';
@@ -24,66 +27,91 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
+  // @override
+  // Future<AuthRole?> loginAny(String email, String password) async {
+  //   try {
+  //     final body = {'email': email, 'password': password};
+  //     final result = await SyncApi.post("auth/login", body);
+  //     _logger.i("🔐 Universal login response: $result");
+
+  //     if (result == null || result is! Map<String, dynamic>) {
+  //       throw Failure('Invalid response from server');
+  //     }
+
+  //     if (result['success'] != true) {
+  //       throw Failure(result['message'] ?? 'Login failed');
+  //     }
+
+  //     final role = _mapRole(result['role']);
+  //     if (role == AuthRole.owner) {
+  //       final sub = result['subscription'];
+  //       if (sub == null || sub['status'] != 'active') {
+  //         throw Failure('Your subscription is inactive or expired.');
+  //       }
+  //     }
+
+  //     _logger.i("✅ Login successful as $role");
+  //     return role;
+  //   } catch (e) {
+  //     _logger.e("❌ Universal login error: $e");
+
+  //     if (e is Failure) throw e;
+
+  //     throw ExceptionHandler.handle(e);
+  //   }
+  // }
+
   @override
-  Future<AuthRole?> loginOwner(String email, String password) async {
+  Future<AuthRole?> loginAny(String email, String password) async {
     try {
       final body = {'email': email, 'password': password};
-
-      // 🔹 API call
-      final result = await SyncApi.post("auth/login", body);
-      _logger.i("🔐 Login response: $result");
-
-      // 🔸 Validate response
-      if (result == null || result is! Map<String, dynamic>) {
-        _logger.w("⚠️ Invalid login response format");
-        return null;
-      }
-
-      final bool success = result['success'] == true;
-      if (!success) {
-        _logger.w("❌ Login failed: ${result['message']}");
-        return null;
-      }
-
-      final role = _mapRole(result['role']);
-      if (role == AuthRole.owner) {
-        _logger.i("✅ Owner login success");
-        return role;
-      }
-
-      _logger.w("⚠️ Non-owner role attempted login: ${result['role']}");
-      return null;
-    } catch (e) {
-      _logger.e("❌ Login error: $e");
-      return null;
-    }
-  }
-
-  @override
-  Future<AuthRole?> loginAny(
-    String email,
-    String password, {
-    String? activationCode,
-  }) async {
-    try {
-      final body = {'email': email, 'password': password};
-
-      if (activationCode != null && activationCode.isNotEmpty) {
-        body['activationCode'] = activationCode;
-      }
-
       final result = await SyncApi.post("auth/login", body);
       _logger.i("🔐 Universal login response: $result");
 
-      if (result == null || result is! Map<String, dynamic>) return null;
-      if (result['success'] != true) return null;
+      if (result == null || result is! Map<String, dynamic>) {
+        throw Failure('Invalid response from server');
+      }
+
+      if (result['success'] != true) {
+        throw Failure(result['message'] ?? 'Login failed');
+      }
 
       final role = _mapRole(result['role']);
+      if (role == null) throw Failure("Invalid role from server");
+
+      // 🔹 Prepare AuthStorageHelper
+      final authStorage = AuthStorageHelper();
+
+      // 🔹 Save ID based on role
+      if (role == AuthRole.owner) {
+        final sub = result['subscription'];
+        if (sub == null || sub['status'] != 'active') {
+          throw Failure('Your subscription is inactive or expired.');
+        }
+
+        final owner = result['owner'];
+        final ownerId = owner?['id']?.toString();
+
+        await authStorage.saveLogin(role: role, email: email, ownerId: ownerId);
+        _logger.i("💾 Saved owner login → ID: $ownerId");
+      } else if (role == AuthRole.superAdmin) {
+        final admin = result['admin'];
+        final adminId = admin?['id']?.toString();
+
+        await authStorage.saveLogin(role: role, email: email, adminId: adminId);
+        _logger.i("💾 Saved super admin login → ID: $adminId");
+      } else {
+        await authStorage.saveLogin(role: role, email: email);
+        _logger.w("⚠️ Unknown role, only email saved");
+      }
+
       _logger.i("✅ Login successful as $role");
       return role;
     } catch (e) {
       _logger.e("❌ Universal login error: $e");
-      return null;
+
+      if (e is Failure) throw e;
+      throw ExceptionHandler.handle(e);
     }
   }
 }

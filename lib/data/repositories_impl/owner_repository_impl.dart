@@ -1,8 +1,6 @@
 import 'package:pos_desktop/data/models/owner_model.dart';
-import 'package:pos_desktop/data/models/subscription_model.dart';
 import 'package:pos_desktop/data/remote/api/sync_api.dart';
 import 'package:pos_desktop/domain/entities/online/owner_entity.dart';
-import 'package:pos_desktop/domain/entities/online/subscription_entity.dart';
 import 'package:pos_desktop/domain/repositories/owner_repository.dart';
 
 class OwnerRepositoryImpl implements OwnerRepository {
@@ -23,7 +21,7 @@ class OwnerRepositoryImpl implements OwnerRepository {
 
   @override
   Future<List<OwnerEntity>> getPendingOwners() async {
-    final data = await SyncApi.get("owners/pending");
+    final data = await SyncApi.get("owners/pending-with-subscriptions");
     return _mapOwners(data);
   }
 
@@ -37,8 +35,6 @@ class OwnerRepositoryImpl implements OwnerRepository {
   Future<void> addOwner(OwnerEntity owner) async {
     final model = OwnerModel(
       id: owner.id,
-      superAdminId: owner.superAdminId,
-      shopName: owner.shopName,
       ownerName: owner.ownerName,
       email: owner.email,
       password: owner.password,
@@ -89,43 +85,6 @@ class OwnerRepositoryImpl implements OwnerRepository {
     if (result == null || result is! Map<String, dynamic>) return null;
 
     return OwnerModel.fromMap(result);
-  }
-
-  @override
-  Future<SubscriptionEntity?> getOwnerSubscription(String ownerId) async {
-    final list = await SyncApi.get(
-      "owners/subscriptions/owner/$ownerId",
-    ); // returns list
-
-    if (list.isEmpty) return null;
-
-    final first = list.first;
-    if (first is! Map<String, dynamic>) return null;
-
-    return SubscriptionModel.fromMap(first);
-  }
-
-  // ------------ Subscription-related methods defined in OwnerRepository ------------
-
-  @override
-  Future<List<Map<String, dynamic>>> getSubscriptionPlans() async {
-    final list = await SyncApi.get("subscription-plans");
-    return list.whereType<Map<String, dynamic>>().toList();
-  }
-
-  @override
-  Future<void> updateOwnerSubscription({
-    required String ownerId,
-    required String subscriptionPlan,
-    required String receiptImage,
-    required double subscriptionAmount,
-  }) async {
-    await SyncApi.post("owners/subscriptions", {
-      "ownerId": ownerId,
-      "subscriptionPlanName": subscriptionPlan,
-      "receiptImage": receiptImage,
-      "subscriptionAmount": subscriptionAmount,
-    });
   }
 
   @override

@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 // ======================================================
 // 🧠 CORE LAYER
 // ======================================================
-import 'package:pos_desktop/core/storage/auth_storage.dart';
 import 'package:pos_desktop/core/storage/shared_prefs_storage.dart';
 import 'package:pos_desktop/core/storage/storage_service.dart';
 
@@ -67,20 +66,19 @@ import 'package:pos_desktop/domain/usecases/supplier_usecase.dart';
 import 'package:pos_desktop/domain/usecases/expense_usecase.dart';
 import 'package:pos_desktop/domain/usecases/sync_usecase.dart';
 
-// ======================================================
-// 🚀 DEPENDENCY SETUP ENTRY POINT
-// ======================================================
-void setupDependencies() {
+Future<void> setupDependencies() async {
   print('🔄 Setting up dependencies...');
 
   // ======================================================
   // CORE LAYER
   // ======================================================
-  Get.lazyPut<StorageService>(() => SharedPrefsStorage(), fenix: true);
-  Get.lazyPut<AuthStorage>(
-    () => AuthStorage(Get.find<StorageService>()),
-    fenix: true,
-  );
+
+  // 1️⃣ Initialize SharedPrefs storage first
+  final sharedPrefs = SharedPrefsStorage();
+  await sharedPrefs.init(); // ✅ this line is critical
+
+  // 2️⃣ Register it with GetX
+  Get.put<StorageService>(sharedPrefs, permanent: true);
 
   // ======================================================
   // LOCAL DATABASE (DAO)
@@ -106,7 +104,6 @@ void setupDependencies() {
     fenix: true,
   );
 
-  // 🧱 Local + DAO-backed repositories
   Get.lazyPut<StoreRepository>(() => StoreRepositoryImpl());
   Get.lazyPut<CategoryRepository>(
     () => CategoryRepositoryImpl(Get.find<CategoryDao>()),
@@ -127,22 +124,18 @@ void setupDependencies() {
   Get.lazyPut<SyncRepository>(() => SyncRepositoryImpl(), fenix: true);
 
   // ======================================================
-  // DOMAIN LAYER – USECASES (wired to REPOSITORY INTERFACES)
+  // DOMAIN LAYER – USECASES
   // ======================================================
-
-  // AUTH
   Get.lazyPut<AuthUseCase>(
     () => AuthUseCase(Get.find<AuthRepository>()),
     fenix: true,
   );
 
-  // OWNER
   Get.lazyPut<OwnerUseCase>(
     () => OwnerUseCase(Get.find<OwnerRepository>()),
     fenix: true,
   );
 
-  // SUBSCRIPTION
   Get.lazyPut<SubscriptionUseCase>(
     () => SubscriptionUseCase(
       Get.find<SubscriptionRepository>(),
@@ -151,55 +144,46 @@ void setupDependencies() {
     fenix: true,
   );
 
-  // STORE
   Get.lazyPut<StoreUseCase>(
     () => StoreUseCase(Get.find<StoreRepository>()),
     fenix: true,
   );
 
-  // CATEGORY
   Get.lazyPut<CategoryUseCase>(
     () => CategoryUseCase(Get.find<CategoryRepository>()),
     fenix: true,
   );
 
-  // BRAND
   Get.lazyPut<BrandUseCase>(
     () => BrandUseCase(Get.find<BrandRepository>()),
     fenix: true,
   );
 
-  // PRODUCT
   Get.lazyPut<ProductUseCase>(
     () => ProductUseCase(Get.find<ProductRepository>()),
     fenix: true,
   );
 
-  // SALE
   Get.lazyPut<SaleUseCase>(
     () => SaleUseCase(Get.find<SaleRepository>()),
     fenix: true,
   );
 
-  // CUSTOMER
   Get.lazyPut<CustomerUseCase>(
     () => CustomerUseCase(Get.find<CustomerRepository>()),
     fenix: true,
   );
 
-  // SUPPLIER
   Get.lazyPut<SupplierUseCase>(
     () => SupplierUseCase(Get.find<SupplierRepository>()),
     fenix: true,
   );
 
-  // EXPENSE
   Get.lazyPut<ExpenseUseCase>(
     () => ExpenseUseCase(Get.find<ExpenseRepository>()),
     fenix: true,
   );
 
-  // SYNC
   Get.lazyPut<SyncUseCase>(
     () => SyncUseCase(Get.find<SyncRepository>()),
     fenix: true,

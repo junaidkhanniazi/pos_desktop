@@ -34,28 +34,51 @@ class SubscriptionPlanModel extends SubscriptionPlanEntity {
         features: e.features,
       );
 
-  factory SubscriptionPlanModel.fromMap(Map<String, dynamic> map) =>
-      SubscriptionPlanModel(
-        id: map['id'] ?? 0,
-        name: map['name'] ?? '',
-        durationDays: map['duration_days'],
-        price: (map['price'] ?? 0).toDouble(),
-        maxStores: map['maxStores'] ?? 0,
-        maxProducts: map['maxProducts'] ?? 0,
-        maxCategories: map['maxCategories'] ?? 0,
-        features: map['features'] ?? '',
-      );
+  factory SubscriptionPlanModel.fromMap(Map<String, dynamic> map) {
+    return SubscriptionPlanModel(
+      id: map['id'] is int
+          ? map['id']
+          : int.tryParse(map['id'].toString()) ?? 0,
+      name: map['name'] ?? '',
+      price: _parseDouble(map['price']),
+      durationDays: map['duration_days'] is int
+          ? map['duration_days']
+          : int.tryParse(map['duration_days'].toString()) ?? 0,
+      features: map['features'] is String
+          ? map['features']
+          : map['features']?.toString() ?? '',
+      maxStores: map['maxStores'] is int
+          ? map['maxStores']
+          : int.tryParse(map['maxStores'].toString()) ?? 0,
+      maxProducts: map['maxProducts'] is int
+          ? map['maxProducts']
+          : int.tryParse(map['maxProducts'].toString()) ?? 0,
+      maxCategories: map['maxCategories'] is int
+          ? map['maxCategories']
+          : int.tryParse(map['maxCategories'].toString()) ?? 0,
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'name': name,
-    'duration_days': durationDays,
-    'price': price,
-    'maxStores': maxStores,
-    'maxProducts': maxProducts,
-    'maxCategories': maxCategories,
-    'features': features,
-  };
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'duration_days': durationDays,
+      'features': features,
+      'maxStores': maxStores,
+      'maxProducts': maxProducts,
+      'maxCategories': maxCategories,
+    };
+  }
 
   factory SubscriptionPlanModel.fromJson(String source) =>
       SubscriptionPlanModel.fromMap(
